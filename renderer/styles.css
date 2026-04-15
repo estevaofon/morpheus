@@ -222,10 +222,12 @@ html, body {
    ============================================ */
 .editor-area {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--matrix-bg);
   position: relative;
+  overflow: hidden;
 }
 
 .editor-header {
@@ -235,10 +237,12 @@ html, body {
   border-bottom: 1px solid var(--matrix-border);
   gap: 12px;
   background: var(--matrix-bg-secondary);
+  flex-shrink: 0;
 }
 
 .note-title-input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--matrix-border);
@@ -262,6 +266,7 @@ html, body {
 .editor-toolbar {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .toolbar-btn {
@@ -356,7 +361,7 @@ html, body {
   width: 100%;
   height: 100%;
   padding: 24px 32px 24px 52px;
-  overflow-y: auto;
+  overflow: auto;
   color: var(--matrix-green);
   font-family: var(--font-mono);
   font-size: 14px;
@@ -582,6 +587,7 @@ html, body {
 /* Status Bar */
 .status-bar {
   height: 28px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -660,6 +666,7 @@ html, body {
   background: var(--matrix-bg-secondary);
   border-bottom: 1px solid var(--matrix-border);
   animation: findBarSlideIn 0.2s ease-out;
+  flex-shrink: 0;
 }
 
 @keyframes findBarSlideIn {
