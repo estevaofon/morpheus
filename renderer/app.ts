@@ -13,6 +13,7 @@ interface Note {
 let notes: Note[] = [];
 let activeNoteId: string | null = null;
 let isPreviewMode: boolean = false;
+let inFlightCreate: Promise<void> | null = null;
 
 // Find state
 let findMatches: { start: number; end: number }[] = [];
@@ -69,6 +70,11 @@ document.getElementById('btn-delete')?.addEventListener('click', () => deleteCur
 // Markdown Viewer toggle
 previewBtn?.addEventListener('click', () => togglePreview());
 
+// Auto-create note as soon as the user starts typing a title
+noteTitleInput.addEventListener('input', () => {
+  if (noteTitleInput.value) void ensureActiveNote();
+});
+
 // Auto-save title on Enter or blur
 noteTitleInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -100,9 +106,10 @@ findCase?.addEventListener('change', () => performFind());
 findPrevBtn?.addEventListener('click', () => navigateFind(-1));
 findNextBtn?.addEventListener('click', () => navigateFind(1));
 
-// Character count
+// Character count + auto-create note on first keystroke
 noteContentInput.addEventListener('input', () => {
   charCount.textContent = `${noteContentInput.value.length} chars`;
+  if (noteContentInput.value) void ensureActiveNote();
   // Re-run find if find bar is open
   if (findBar.style.display === 'flex') performFind();
 });
@@ -259,12 +266,39 @@ async function createNewNote(): Promise<void> {
 }
 
 /**
+ * Ensure there's an active note to edit. If none exists yet, create an empty
+ * one in the store and adopt it as the active note without touching the inputs
+ * (so whatever the user typed so far is preserved). Concurrent callers share
+ * the same in-flight creation so we never create duplicates.
+ */
+async function ensureActiveNote(): Promise<void> {
+  if (activeNoteId) return;
+  if (!inFlightCreate) {
+    inFlightCreate = (async () => {
+      try {
+        const note = await window.electronAPI.createNote('', '');
+        activeNoteId = note.id;
+        notes = await window.electronAPI.listNotes();
+        renderNotesList(searchInput.value.toLowerCase());
+      } finally {
+        inFlightCreate = null;
+      }
+    })();
+  }
+  await inFlightCreate;
+}
+
+/**
  * Save just the title if it has changed
  */
 async function saveTitle(): Promise<void> {
+  const newTitle = noteTitleInput.value.trim();
+  if (!activeNoteId) {
+    if (!newTitle) return;
+    await ensureActiveNote();
+  }
   if (!activeNoteId) return;
   const currentNote = notes.find(n => n.id === activeNoteId);
-  const newTitle = noteTitleInput.value.trim();
   if (!currentNote || currentNote.title === newTitle) return;
 
   const updated = await window.electronAPI.editNote(activeNoteId, newTitle, noteContentInput.value);
@@ -278,12 +312,17 @@ async function saveTitle(): Promise<void> {
  * Persist current note (title + content) to the store if anything changed
  */
 async function persistCurrentNote(): Promise<void> {
-  if (!activeNoteId) return;
-  const currentNote = notes.find(n => n.id === activeNoteId);
-  if (!currentNote) return;
-
   const newTitle = noteTitleInput.value.trim();
   const newContent = noteContentInput.value;
+
+  if (!activeNoteId) {
+    if (!newTitle && !newContent) return;
+    await ensureActiveNote();
+  }
+  if (!activeNoteId) return;
+
+  const currentNote = notes.find(n => n.id === activeNoteId);
+  if (!currentNote) return;
   if (currentNote.title === newTitle && currentNote.content === newContent) return;
 
   const updated = await window.electronAPI.editNote(activeNoteId, newTitle, newContent);

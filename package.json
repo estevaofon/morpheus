@@ -11,12 +11,12 @@
   },
   "dependencies": {
     "dompurify": "^3.4.0",
-    "electron": "^28.0.0",
     "marked": "^18.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
+    "electron": "^28.0.0",
     "electron-builder": "^24.0.0",
     "typescript": "^5.0.0"
   },
@@ -27,7 +27,7 @@
       "output": "release"
     },
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "portable"]
     }
   }
 }
