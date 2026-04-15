@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { createNote, editNote, deleteNote, getNote, listNotes } from './notepad';
+import { createNote, editNote, deleteNote, getNote, listNotes, setNoteFilePath, findNoteByFilePath } from './notepad';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -65,10 +65,11 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => mainWindow?.close());
 
 // IPC Handlers — File Save As
-ipcMain.handle('file:saveAs', async (_event, content: string) => {
+ipcMain.handle('file:saveAs', async (_event, content: string, existingPath?: string) => {
+  const defaultPath = existingPath && existingPath.trim() ? existingPath : 'Untitled.txt';
   const result = await dialog.showSaveDialog(mainWindow!, {
     title: 'Save As — Morpheus',
-    defaultPath: 'note.txt',
+    defaultPath,
     filters: [
       { name: 'Text Files', extensions: ['txt'] },
       { name: 'Markdown', extensions: ['md'] },
@@ -85,5 +86,42 @@ ipcMain.handle('file:saveAs', async (_event, content: string) => {
     return { success: true, filePath: result.filePath };
   } catch (err) {
     return { success: false, filePath: null, error: String(err) };
+  }
+});
+
+ipcMain.handle('notes:setFilePath', async (_event, id: string, filePath: string) => {
+  return await setNoteFilePath(id, filePath);
+});
+
+ipcMain.handle('notes:findByFilePath', async (_event, filePath: string) => {
+  return await findNoteByFilePath(filePath);
+});
+
+ipcMain.handle('file:save', async (_event, filePath: string, content: string) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return { success: true, filePath };
+  } catch (err) {
+    return { success: false, filePath: null, error: String(err) };
+  }
+});
+
+ipcMain.handle('file:open', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    title: 'Open — Morpheus',
+    filters: [
+      { name: 'Text Files', extensions: ['txt'] },
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const filePath = result.filePaths[0];
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { filePath, content };
+  } catch (err) {
+    return { error: String(err) };
   }
 });

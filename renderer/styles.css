@@ -756,5 +756,70 @@ html, body {
 }
 
 /* ============================================
+   CONFIRM MODAL
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: #000;
+  border: 1px solid var(--matrix-green);
+  box-shadow: 0 0 20px var(--matrix-green);
+  padding: 24px 28px;
+  min-width: 320px;
+  max-width: 480px;
+  font-family: inherit;
+}
+
+.modal-message {
+  color: var(--matrix-green);
+  font-size: 14px;
+  margin-bottom: 20px;
+  text-shadow: var(--matrix-text-shadow);
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-btn {
+  background: transparent;
+  border: 1px solid var(--matrix-dim-green);
+  color: var(--matrix-green);
+  padding: 6px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.modal-btn:hover,
+.modal-btn:focus {
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 8px var(--matrix-green);
+  outline: none;
+}
+
+.modal-btn-danger {
+  color: #ff4141;
+  border-color: #7a1f1f;
+}
+
+.modal-btn-danger:hover,
+.modal-btn-danger:focus {
+  border-color: #ff4141;
+  box-shadow: 0 0 8px #ff4141;
+}
+
+/* ============================================
    ANIMATIONS — removed flicker
    ============================================ */

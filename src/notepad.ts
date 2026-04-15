@@ -10,6 +10,7 @@ export interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
+  filePath?: string;
 }
 
 async function initNotes(): Promise<void> {
@@ -70,6 +71,20 @@ export async function deleteNote(id: string): Promise<boolean> {
   if (filtered.length === notes.length) return false;
   await saveNotes(filtered);
   return true;
+}
+
+export async function setNoteFilePath(id: string, filePath: string): Promise<Note | null> {
+  const notes = await loadNotes();
+  const index = notes.findIndex(n => n.id === id);
+  if (index === -1) return null;
+  notes[index] = { ...notes[index], filePath };
+  await saveNotes(notes);
+  return notes[index];
+}
+
+export async function findNoteByFilePath(filePath: string): Promise<Note | null> {
+  const notes = await loadNotes();
+  return notes.find(n => n.filePath === filePath) || null;
 }
 
 export async function getNote(id: string): Promise<Note | null> {

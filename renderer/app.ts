@@ -6,6 +6,7 @@ interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
+  filePath?: string;
 }
 
 // State
@@ -27,6 +28,12 @@ const previewBtn = document.getElementById('btn-preview') as HTMLButtonElement;
 const statusText = document.getElementById('status-text')!;
 const charCount = document.getElementById('char-count')!;
 
+// Confirm modal elements
+const confirmModal = document.getElementById('confirm-modal') as HTMLDivElement;
+const confirmModalMessage = document.getElementById('confirm-modal-message') as HTMLDivElement;
+const confirmModalOk = document.getElementById('confirm-modal-ok') as HTMLButtonElement;
+const confirmModalCancel = document.getElementById('confirm-modal-cancel') as HTMLButtonElement;
+
 // Find bar elements
 const findBar = document.getElementById('find-bar') as HTMLDivElement;
 const findInput = document.getElementById('find-input') as HTMLInputElement;
@@ -46,8 +53,14 @@ document.getElementById('btn-close')?.addEventListener('click', () => window.ele
 // New Note
 document.getElementById('btn-new')?.addEventListener('click', () => createNewNote());
 
-// Save Note
-document.getElementById('btn-save')?.addEventListener('click', () => saveCurrentNote());
+// Save Note (Shift+click forces Save As)
+document.getElementById('btn-save')?.addEventListener('click', (e) => {
+  if ((e as MouseEvent).shiftKey) saveAsCurrentNote();
+  else saveCurrentNote();
+});
+
+// Open File
+document.getElementById('btn-open')?.addEventListener('click', () => openFileFlow());
 
 // Delete Note
 document.getElementById('btn-delete')?.addEventListener('click', () => deleteCurrentNote());
@@ -64,6 +77,9 @@ noteTitleInput.addEventListener('keydown', (e) => {
   }
 });
 noteTitleInput.addEventListener('blur', () => saveTitle());
+
+// Persist content on blur so nothing is lost when focus leaves the editor
+noteContentInput.addEventListener('blur', () => persistCurrentNote());
 
 // Find bar toggle
 findBtn?.addEventListener('click', () => showFindBar());
@@ -124,9 +140,18 @@ searchInput.addEventListener('input', () => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+    e.preventDefault();
+    saveAsCurrentNote();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
     saveCurrentNote();
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) {
+    e.preventDefault();
+    openFileFlow();
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
@@ -178,11 +203,13 @@ function renderNotesList(filter: string = ''): void {
       const preview = note.content.substring(0, 60).replace(/\n/g, ' ') || '(empty)';
       const isActive = note.id === activeNoteId;
 
-      const titleHtml = filter ? highlightText(note.title || '(untitled)', filter) : escapeHtml(note.title) || '(untitled)';
+      const displayTitle = truncateMiddle(note.title || '(untitled)', 42);
+      const titleHtml = filter ? highlightText(displayTitle, filter) : escapeHtml(displayTitle);
       const previewHtml = filter ? highlightText(preview, filter) : escapeHtml(preview);
+      const titleAttr = escapeHtml(note.title || '');
 
       return `
-        <div class="note-item ${isActive ? 'active' : ''}" data-id="${note.id}">
+        <div class="note-item ${isActive ? 'active' : ''}" data-id="${note.id}" title="${titleAttr}">
           <div class="note-item-title">${titleHtml}</div>
           <div class="note-item-preview">${previewHtml}</div>
           <div class="note-item-date">${date}</div>
@@ -202,6 +229,9 @@ function renderNotesList(filter: string = ''): void {
  * Select a note to view/edit
  */
 async function selectNote(id: string): Promise<void> {
+  if (activeNoteId && activeNoteId !== id) {
+    await persistCurrentNote();
+  }
   activeNoteId = id;
   const note = await window.electronAPI.getNote(id);
   if (note) {
@@ -244,18 +274,92 @@ async function saveTitle(): Promise<void> {
 }
 
 /**
- * Save current note — opens native Save As dialog
+ * Persist current note (title + content) to the store if anything changed
+ */
+async function persistCurrentNote(): Promise<void> {
+  if (!activeNoteId) return;
+  const currentNote = notes.find(n => n.id === activeNoteId);
+  if (!currentNote) return;
+
+  const newTitle = noteTitleInput.value.trim();
+  const newContent = noteContentInput.value;
+  if (currentNote.title === newTitle && currentNote.content === newContent) return;
+
+  const updated = await window.electronAPI.editNote(activeNoteId, newTitle, newContent);
+  if (updated) {
+    notes = await window.electronAPI.listNotes();
+  }
+}
+
+/**
+ * Flash the save button for visual feedback
+ */
+function flashSaveBtn(): void {
+  const saveBtn = document.getElementById('btn-save')!;
+  saveBtn.style.color = '#00ff41';
+  saveBtn.style.boxShadow = '0 0 10px #00ff41';
+  setTimeout(() => {
+    saveBtn.style.color = '';
+    saveBtn.style.boxShadow = '';
+  }, 500);
+}
+
+/**
+ * Apply save result: update note filePath, title, UI
+ */
+async function applySaveResult(filePath: string, content: string): Promise<void> {
+  if (!activeNoteId) return;
+  await window.electronAPI.setNoteFilePath(activeNoteId, filePath);
+  await window.electronAPI.editNote(activeNoteId, filePath, content);
+  noteTitleInput.value = filePath;
+  notes = await window.electronAPI.listNotes();
+  renderNotesList(searchInput.value.toLowerCase());
+}
+
+/**
+ * Save — writes directly to the existing filePath if any, otherwise opens Save As dialog.
  */
 async function saveCurrentNote(): Promise<void> {
   await saveTitle();
   const content = noteContentInput.value;
-  const title = noteTitleInput.value.trim() || 'untitled';
+  const currentNote = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
+  const existingPath = currentNote?.filePath;
+
+  if (!existingPath) {
+    await saveAsCurrentNote();
+    return;
+  }
 
   try {
-    const result = await window.electronAPI.saveAs(content);
-    if (result.success) {
-      const fileName = result.filePath!.split(/[\\/]/).pop();
-      setStatus(`> Saved "${fileName}" to the Matrix.`);
+    const result = await window.electronAPI.saveFile(existingPath, content);
+    if (result.success && result.filePath) {
+      await applySaveResult(result.filePath, content);
+      setStatus(`> Saved to ${result.filePath}`);
+    } else {
+      setStatus(`> Error saving: ${result.error}`);
+    }
+  } catch (err) {
+    console.error('Save error:', err);
+    setStatus(`> Error saving: ${String(err)}`);
+  }
+
+  flashSaveBtn();
+}
+
+/**
+ * Save As — always opens the native dialog, even if the note already has a filePath.
+ */
+async function saveAsCurrentNote(): Promise<void> {
+  await saveTitle();
+  const content = noteContentInput.value;
+  const currentNote = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
+  const existingPath = currentNote?.filePath;
+
+  try {
+    const result = await window.electronAPI.saveAs(content, existingPath);
+    if (result.success && result.filePath) {
+      await applySaveResult(result.filePath, content);
+      setStatus(`> Saved to ${result.filePath}`);
     } else if (result.filePath === null && !result.error) {
       setStatus('> Save cancelled.');
     } else {
@@ -266,13 +370,41 @@ async function saveCurrentNote(): Promise<void> {
     setStatus(`> Error saving: ${String(err)}`);
   }
 
-  const saveBtn = document.getElementById('btn-save')!;
-  saveBtn.style.color = '#00ff41';
-  saveBtn.style.boxShadow = '0 0 10px #00ff41';
-  setTimeout(() => {
-    saveBtn.style.color = '';
-    saveBtn.style.boxShadow = '';
-  }, 500);
+  flashSaveBtn();
+}
+
+/**
+ * Open a file from disk — if a note already tracks it, select that note; otherwise create a new one.
+ */
+async function openFileFlow(): Promise<void> {
+  try {
+    const result = await window.electronAPI.openFile();
+    if (!result) {
+      setStatus('> Open cancelled.');
+      return;
+    }
+    if ('error' in result) {
+      setStatus(`> Error opening: ${result.error}`);
+      return;
+    }
+
+    const existing = await window.electronAPI.findNoteByFilePath(result.filePath);
+    if (existing) {
+      notes = await window.electronAPI.listNotes();
+      await selectNote(existing.id);
+      setStatus(`> Opened existing note for ${result.filePath}`);
+      return;
+    }
+
+    const created = await window.electronAPI.createNote(result.filePath, result.content);
+    await window.electronAPI.setNoteFilePath(created.id, result.filePath);
+    notes = await window.electronAPI.listNotes();
+    await selectNote(created.id);
+    setStatus(`> Loaded ${result.filePath}`);
+  } catch (err) {
+    console.error('Open error:', err);
+    setStatus(`> Error opening: ${String(err)}`);
+  }
 }
 
 /**
@@ -284,16 +416,33 @@ async function deleteCurrentNote(): Promise<void> {
     return;
   }
 
-  if (!confirm('Delete this note from the Matrix?')) return;
+  const confirmed = await customConfirm('Delete this note from the Matrix?');
+  if (!confirmed) {
+    noteContentInput.focus();
+    return;
+  }
 
-  const deleted = await window.electronAPI.deleteNote(activeNoteId);
-  if (deleted) {
+  const deletedId = activeNoteId;
+  const deleted = await window.electronAPI.deleteNote(deletedId);
+  if (!deleted) return;
+
+  notes = await window.electronAPI.listNotes();
+  const nextNote = notes
+    .filter(n => n.id !== deletedId)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+
+  if (nextNote) {
+    await selectNote(nextNote.id);
+    noteContentInput.focus();
+    setStatus('> Note deleted from the Matrix.');
+  } else {
     activeNoteId = null;
     noteTitleInput.value = '';
     noteContentInput.value = '';
     charCount.textContent = '0 chars';
-    await loadNotes();
-    setStatus('> Note deleted from the Matrix.');
+    renderNotesList(searchInput.value.toLowerCase());
+    noteTitleInput.focus();
+    setStatus('> Note deleted. No notes in the Matrix.');
   }
 }
 
@@ -455,6 +604,35 @@ function navigateFind(direction: number): void {
 }
 
 /**
+ * In-app confirm modal — returns a Promise<boolean>
+ */
+function customConfirm(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmModalMessage.textContent = message;
+    confirmModal.style.display = 'flex';
+    confirmModalOk.focus();
+
+    const cleanup = (result: boolean) => {
+      confirmModal.style.display = 'none';
+      confirmModalOk.removeEventListener('click', onOk);
+      confirmModalCancel.removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+      if (e.key === 'Enter') { e.preventDefault(); cleanup(true); }
+    };
+
+    confirmModalOk.addEventListener('click', onOk);
+    confirmModalCancel.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+/**
  * Set status bar text
  */
 function setStatus(text: string): void {
@@ -486,6 +664,16 @@ function highlightText(text: string, query: string): string {
  */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Truncate a string in the middle, preserving head and tail.
+ * Useful for file paths: "C:\Users\foo\bar\baz.txt" → "C:\Users\f…ar\baz.txt"
+ */
+function truncateMiddle(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const keep = Math.max(1, Math.floor((maxLen - 1) / 2));
+  return text.slice(0, keep) + '…' + text.slice(text.length - keep);
 }
 
 // Initialize

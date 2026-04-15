@@ -6,6 +6,7 @@ export interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
+  filePath?: string;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -25,6 +26,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window:close'),
 
   // File save
-  saveAs: (content: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
-    ipcRenderer.invoke('file:saveAs', content),
+  saveAs: (content: string, existingPath?: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
+    ipcRenderer.invoke('file:saveAs', content, existingPath),
+  saveFile: (filePath: string, content: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
+    ipcRenderer.invoke('file:save', filePath, content),
+  openFile: (): Promise<{ filePath: string; content: string } | { error: string } | null> =>
+    ipcRenderer.invoke('file:open'),
+  setNoteFilePath: (id: string, filePath: string): Promise<Note | null> =>
+    ipcRenderer.invoke('notes:setFilePath', id, filePath),
+  findNoteByFilePath: (filePath: string): Promise<Note | null> =>
+    ipcRenderer.invoke('notes:findByFilePath', filePath),
 });

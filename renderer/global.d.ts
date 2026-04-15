@@ -4,6 +4,7 @@ export interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
+  filePath?: string;
 }
 
 export interface ElectronAPI {
@@ -20,7 +21,11 @@ export interface ElectronAPI {
   close(): void;
 
   // File save
-  saveAs(content: string): Promise<{ success: boolean; filePath: string | null; error?: string }>;
+  saveAs(content: string, existingPath?: string): Promise<{ success: boolean; filePath: string | null; error?: string }>;
+  saveFile(filePath: string, content: string): Promise<{ success: boolean; filePath: string | null; error?: string }>;
+  openFile(): Promise<{ filePath: string; content: string } | { error: string } | null>;
+  setNoteFilePath(id: string, filePath: string): Promise<Note | null>;
+  findNoteByFilePath(filePath: string): Promise<Note | null>;
 }
 
 declare global {

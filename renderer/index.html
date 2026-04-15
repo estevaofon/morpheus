@@ -46,7 +46,8 @@
         <input type="text" id="note-title" class="note-title-input" placeholder="> Note title...">
         <div class="editor-toolbar">
           <button class="toolbar-btn" id="btn-preview" title="Markdown Viewer (Ctrl+Shift+P)">&#128196; Markdown Viewer</button>
-          <button class="toolbar-btn" id="btn-save" title="Save As">&#128190; Save As</button>
+          <button class="toolbar-btn" id="btn-open" title="Open (Ctrl+O)">&#128194; Open</button>
+          <button class="toolbar-btn" id="btn-save" title="Save (Ctrl+S) — Shift for Save As">&#128190; Save</button>
           <button class="toolbar-btn" id="btn-delete" title="Delete">&#9746; Delete</button>
         </div>
       </div>
@@ -77,6 +78,17 @@
         <span id="char-count">0 chars</span>
       </div>
     </main>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirm-modal" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-message" id="confirm-modal-message"></div>
+      <div class="modal-buttons">
+        <button class="modal-btn" id="confirm-modal-cancel">Cancel</button>
+        <button class="modal-btn modal-btn-danger" id="confirm-modal-ok">Delete</button>
+      </div>
+    </div>
   </div>
 
   <!-- Matrix Rain Canvas -->
