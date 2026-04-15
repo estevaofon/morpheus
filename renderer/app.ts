@@ -574,12 +574,43 @@ function togglePreview(): void {
   }
 }
 
+let mermaidRenderCounter = 0;
+
 function renderPreview(): void {
   const raw = noteContentInput.value || '';
   const html = window.marked.parse(raw);
   notePreviewEl.innerHTML = window.DOMPurify.sanitize(html, {
     ADD_ATTR: ['target'],
   });
+  void renderMermaidBlocks();
+}
+
+async function renderMermaidBlocks(): Promise<void> {
+  const blocks = notePreviewEl.querySelectorAll<HTMLElement>('pre > code.language-mermaid');
+  if (blocks.length === 0) return;
+
+  for (const code of Array.from(blocks)) {
+    const pre = code.parentElement;
+    if (!pre) continue;
+    const source = code.textContent || '';
+    const container = document.createElement('div');
+    container.className = 'mermaid-diagram';
+
+    try {
+      mermaidRenderCounter += 1;
+      const { svg } = await window.mermaid.render(
+        `mermaid-svg-${Date.now()}-${mermaidRenderCounter}`,
+        source
+      );
+      container.innerHTML = svg;
+    } catch (err) {
+      container.classList.add('mermaid-error');
+      const message = err instanceof Error ? err.message : String(err);
+      container.textContent = `> Mermaid error: ${message}`;
+    }
+
+    pre.replaceWith(container);
+  }
 }
 
 // ============================================
@@ -910,5 +941,26 @@ function truncateMiddle(text: string, maxLen: number): string {
 }
 
 // Initialize
+window.mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: 'strict',
+  theme: 'base',
+  fontFamily: '"JetBrains Mono", monospace',
+  themeVariables: {
+    background: '#000000',
+    primaryColor: '#001a00',
+    primaryTextColor: '#00ff41',
+    primaryBorderColor: '#00ff41',
+    lineColor: '#00ff41',
+    secondaryColor: '#003300',
+    tertiaryColor: '#002200',
+    textColor: '#00ff41',
+    mainBkg: '#001a00',
+    nodeBorder: '#00ff41',
+    clusterBkg: '#000d00',
+    clusterBorder: '#00ff41',
+    edgeLabelBackground: '#000000',
+  },
+});
 applyFontColor(loadPreferences().fontColor);
 loadNotes();

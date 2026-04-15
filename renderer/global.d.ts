@@ -38,6 +38,10 @@ declare global {
     DOMPurify: {
       sanitize(dirty: string, config?: Record<string, unknown>): string;
     };
+    mermaid: {
+      initialize(config: Record<string, unknown>): void;
+      render(id: string, text: string): Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
+    };
   }
 }
 
