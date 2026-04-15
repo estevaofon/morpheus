@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 release/
+renderer/*.js
+renderer/*.js.map
+!renderer/marked.umd.js
+!renderer/purify.min.js
 
 # User data (runtime do app)
 notes/
