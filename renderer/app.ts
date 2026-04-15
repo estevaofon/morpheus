@@ -11,6 +11,7 @@ interface Note {
 // State
 let notes: Note[] = [];
 let activeNoteId: string | null = null;
+let isPreviewMode: boolean = false;
 
 // Find state
 let findMatches: { start: number; end: number }[] = [];
@@ -21,6 +22,8 @@ const notesListEl = document.getElementById('notes-list')!;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
 const noteTitleInput = document.getElementById('note-title') as HTMLInputElement;
 const noteContentInput = document.getElementById('note-content') as HTMLTextAreaElement;
+const notePreviewEl = document.getElementById('note-preview') as HTMLDivElement;
+const previewBtn = document.getElementById('btn-preview') as HTMLButtonElement;
 const statusText = document.getElementById('status-text')!;
 const charCount = document.getElementById('char-count')!;
 
@@ -48,6 +51,9 @@ document.getElementById('btn-save')?.addEventListener('click', () => saveCurrent
 
 // Delete Note
 document.getElementById('btn-delete')?.addEventListener('click', () => deleteCurrentNote());
+
+// Markdown Viewer toggle
+previewBtn?.addEventListener('click', () => togglePreview());
 
 // Auto-save title on Enter or blur
 noteTitleInput.addEventListener('keydown', (e) => {
@@ -126,6 +132,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     showFindBar();
   }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
+    e.preventDefault();
+    togglePreview();
+  }
 });
 
 /**
@@ -201,6 +211,7 @@ async function selectNote(id: string): Promise<void> {
     renderNotesList(searchInput.value.toLowerCase());
     setStatus(`> Viewing: ${note.title}`);
     hideFindBar();
+    if (isPreviewMode) renderPreview();
   }
 }
 
@@ -284,6 +295,43 @@ async function deleteCurrentNote(): Promise<void> {
     await loadNotes();
     setStatus('> Note deleted from the Matrix.');
   }
+}
+
+// ============================================
+// MARKDOWN PREVIEW
+// ============================================
+
+function togglePreview(): void {
+  if (!isPreviewMode) {
+    if (!activeNoteId && !noteContentInput.value) {
+      setStatus('> Open or write a note first.');
+      return;
+    }
+    hideFindBar();
+    renderPreview();
+    noteContentInput.style.display = 'none';
+    notePreviewEl.style.display = 'block';
+    previewBtn.classList.add('active');
+    previewBtn.title = 'Edit (Ctrl+Shift+P)';
+    isPreviewMode = true;
+    setStatus('> Preview mode.');
+  } else {
+    notePreviewEl.style.display = 'none';
+    noteContentInput.style.display = '';
+    previewBtn.classList.remove('active');
+    previewBtn.title = 'Markdown Viewer (Ctrl+Shift+P)';
+    isPreviewMode = false;
+    noteContentInput.focus();
+    setStatus('> Edit mode.');
+  }
+}
+
+function renderPreview(): void {
+  const raw = noteContentInput.value || '';
+  const html = window.marked.parse(raw);
+  notePreviewEl.innerHTML = window.DOMPurify.sanitize(html, {
+    ADD_ATTR: ['target'],
+  });
 }
 
 // ============================================

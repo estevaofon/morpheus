@@ -26,6 +26,13 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    marked: {
+      parse(markdown: string): string;
+      setOptions(options: Record<string, unknown>): void;
+    };
+    DOMPurify: {
+      sanitize(dirty: string, config?: Record<string, unknown>): string;
+    };
   }
 }
 

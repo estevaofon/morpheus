@@ -45,6 +45,7 @@
       <div class="editor-header">
         <input type="text" id="note-title" class="note-title-input" placeholder="> Note title...">
         <div class="editor-toolbar">
+          <button class="toolbar-btn" id="btn-preview" title="Markdown Viewer (Ctrl+Shift+P)">&#128196; Markdown Viewer</button>
           <button class="toolbar-btn" id="btn-save" title="Save As">&#128190; Save As</button>
           <button class="toolbar-btn" id="btn-delete" title="Delete">&#9746; Delete</button>
         </div>
@@ -67,6 +68,7 @@
       <div class="editor-content-wrapper">
         <div class="find-highlight-overlay" id="find-highlight-overlay"></div>
         <textarea id="note-content" class="note-content" placeholder="> Begin typing..." spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+        <div id="note-preview" class="note-preview" style="display: none;"></div>
       </div>
 
       <!-- Status Bar -->
@@ -81,6 +83,8 @@
   <canvas id="matrix-canvas"></canvas>
 
   <script src="matrix-rain.js"></script>
+  <script src="marked.umd.js"></script>
+  <script src="purify.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
