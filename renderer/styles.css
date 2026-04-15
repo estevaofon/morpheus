@@ -2,6 +2,14 @@
    MATRIX NOTEPAD — Styles
    ============================================ */
 
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin.woff2') format('woff2');
+}
+
 :root {
   --matrix-green: #00ff41;
   --matrix-dark-green: #00cc33;
@@ -11,7 +19,7 @@
   --matrix-border: #00ff4133;
   --matrix-glow: 0 0 10px #00ff4144, 0 0 20px #00ff4122;
   --matrix-text-shadow: 0 0 5px #00ff4188;
-  --font-mono: 'Courier New', 'Consolas', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
 }
 
 * {
