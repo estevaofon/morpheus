@@ -67,7 +67,7 @@ ipcMain.on('window:close', () => mainWindow?.close());
 // IPC Handlers — File Save As
 ipcMain.handle('file:saveAs', async (_event, content: string) => {
   const result = await dialog.showSaveDialog(mainWindow!, {
-    title: 'Save As — Matrix Notepad',
+    title: 'Save As — Morpheus',
     defaultPath: 'note.txt',
     filters: [
       { name: 'Text Files', extensions: ['txt'] },

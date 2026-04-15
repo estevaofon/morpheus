@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "com.matrix-notepad.app",
-    "productName": "Matrix Notepad",
+    "productName": "Morpheus",
     "directories": {
       "output": "release"
     },
