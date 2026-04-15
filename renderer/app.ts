@@ -36,6 +36,12 @@ const confirmModalMessage = document.getElementById('confirm-modal-message') as 
 const confirmModalOk = document.getElementById('confirm-modal-ok') as HTMLButtonElement;
 const confirmModalCancel = document.getElementById('confirm-modal-cancel') as HTMLButtonElement;
 
+// Preferences modal elements
+const preferencesBtn = document.getElementById('btn-preferences') as HTMLButtonElement;
+const preferencesModal = document.getElementById('preferences-modal') as HTMLDivElement;
+const preferencesModalClose = document.getElementById('preferences-modal-close') as HTMLButtonElement;
+const fontColorRadios = document.querySelectorAll<HTMLInputElement>('input[name="pref-font-color"]');
+
 // Find bar elements
 const findBar = document.getElementById('find-bar') as HTMLDivElement;
 const findInput = document.getElementById('find-input') as HTMLInputElement;
@@ -169,6 +175,32 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     togglePreview();
   }
+  if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+    e.preventDefault();
+    showPreferences();
+  }
+  if (e.key === 'Escape' && preferencesModal.style.display === 'flex') {
+    e.preventDefault();
+    hidePreferences();
+  }
+});
+
+// Preferences wiring
+preferencesBtn?.addEventListener('click', () => showPreferences());
+preferencesModalClose?.addEventListener('click', () => hidePreferences());
+preferencesModal?.addEventListener('click', (e) => {
+  if (e.target === preferencesModal) hidePreferences();
+});
+fontColorRadios.forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) {
+      const color = radio.value === 'white' ? 'white' : 'green';
+      const prefs = loadPreferences();
+      prefs.fontColor = color;
+      savePreferences(prefs);
+      applyFontColor(color);
+    }
+  });
 });
 
 /**
@@ -754,6 +786,56 @@ function navigateFind(direction: number): void {
   findMatchCount.textContent = `${activeMatchIndex + 1}/${count}`;
 }
 
+// ============================================
+// PREFERENCES
+// ============================================
+
+type FontColor = 'green' | 'white';
+interface Preferences {
+  fontColor: FontColor;
+}
+
+const PREFS_KEY = 'morpheus:preferences';
+
+function loadPreferences(): Preferences {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.fontColor === 'green' || parsed.fontColor === 'white')) {
+        return { fontColor: parsed.fontColor };
+      }
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return { fontColor: 'green' };
+}
+
+function savePreferences(prefs: Preferences): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch (err) {
+    console.error('Failed to save preferences:', err);
+  }
+}
+
+function applyFontColor(color: FontColor): void {
+  document.body.classList.toggle('font-color-white', color === 'white');
+}
+
+function showPreferences(): void {
+  const prefs = loadPreferences();
+  fontColorRadios.forEach(r => { r.checked = r.value === prefs.fontColor; });
+  preferencesModal.style.display = 'flex';
+  preferencesModalClose.focus();
+}
+
+function hidePreferences(): void {
+  preferencesModal.style.display = 'none';
+  noteContentInput.focus();
+}
+
 /**
  * In-app confirm modal — returns a Promise<boolean>
  */
@@ -828,4 +910,5 @@ function truncateMiddle(text: string, maxLen: number): string {
 }
 
 // Initialize
+applyFontColor(loadPreferences().fontColor);
 loadNotes();

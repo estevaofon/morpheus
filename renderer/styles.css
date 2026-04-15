@@ -836,5 +836,121 @@ html, body {
 }
 
 /* ============================================
+   PREFERENCES MODAL
+   ============================================ */
+.preferences-box {
+  min-width: 380px;
+  padding: 24px 28px;
+}
+
+.preferences-header {
+  font-size: 16px;
+  color: var(--matrix-green);
+  text-shadow: var(--matrix-text-shadow);
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--matrix-border);
+  padding-bottom: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.preferences-section {
+  margin-bottom: 20px;
+}
+
+.preferences-label {
+  font-size: 11px;
+  color: var(--matrix-dark-green);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.preferences-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preferences-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--matrix-green);
+  padding: 8px 14px;
+  border: 1px solid var(--matrix-border);
+  background: rgba(0, 255, 65, 0.03);
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.preferences-option:hover {
+  border-color: var(--matrix-green);
+  box-shadow: var(--matrix-glow);
+}
+
+.preferences-option:has(input:checked) {
+  border-color: var(--matrix-green);
+  background: rgba(0, 255, 65, 0.1);
+  box-shadow: var(--matrix-glow);
+}
+
+.preferences-option input[type="radio"] {
+  accent-color: var(--matrix-green);
+  cursor: pointer;
+}
+
+.preferences-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--matrix-border);
+  border-radius: 2px;
+}
+
+.preferences-swatch[data-color="green"] {
+  background: var(--matrix-green);
+  box-shadow: 0 0 4px var(--matrix-green);
+}
+
+.preferences-swatch[data-color="white"] {
+  background: #ffffff;
+  box-shadow: 0 0 4px #ffffff;
+}
+
+/* ============================================
+   FONT COLOR: WHITE
+   Overrides the note editing/preview text color
+   ============================================ */
+body.font-color-white .note-content,
+body.font-color-white .note-preview,
+body.font-color-white .note-title-input {
+  color: #ffffff;
+}
+
+body.font-color-white .note-content {
+  caret-color: #ffffff;
+}
+
+body.font-color-white .note-content::selection {
+  background: #ffffff;
+  color: #000000;
+}
+
+body.font-color-white .note-content.searching {
+  color: transparent;
+}
+
+body.font-color-white .note-preview * {
+  color: inherit;
+}
+
+body.font-color-white .find-highlight-overlay {
+  color: #ffffff;
+}
+
+/* ============================================
    ANIMATIONS — removed flicker
    ============================================ */

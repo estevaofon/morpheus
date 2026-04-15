@@ -49,6 +49,7 @@
           <button class="toolbar-btn" id="btn-open" title="Open (Ctrl+O)">&#128194; Open</button>
           <button class="toolbar-btn" id="btn-save" title="Save (Ctrl+S) — Shift for Save As">&#128190; Save</button>
           <button class="toolbar-btn" id="btn-delete" title="Delete">&#9746; Delete</button>
+          <button class="toolbar-btn" id="btn-preferences" title="Preferences (Ctrl+,)">&#9881; Prefs</button>
         </div>
       </div>
 
@@ -87,6 +88,33 @@
       <div class="modal-buttons">
         <button class="modal-btn" id="confirm-modal-cancel">Cancel</button>
         <button class="modal-btn modal-btn-danger" id="confirm-modal-ok">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preferences Modal -->
+  <div class="modal-overlay" id="preferences-modal" style="display: none;">
+    <div class="modal-box preferences-box">
+      <div class="preferences-header">&#9881; Preferences</div>
+
+      <div class="preferences-section">
+        <div class="preferences-label">&gt; Font Color</div>
+        <div class="preferences-options">
+          <label class="preferences-option">
+            <input type="radio" name="pref-font-color" value="green">
+            <span class="preferences-swatch" data-color="green"></span>
+            <span>Green</span>
+          </label>
+          <label class="preferences-option">
+            <input type="radio" name="pref-font-color" value="white">
+            <span class="preferences-swatch" data-color="white"></span>
+            <span>White</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="modal-btn" id="preferences-modal-close">Close</button>
       </div>
     </div>
   </div>
