@@ -522,6 +522,21 @@ html, body {
   text-decoration: line-through;
 }
 
+.note-preview .find-preview-mark {
+  background: rgba(0, 255, 65, 0.35);
+  color: var(--matrix-green);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: bold;
+}
+
+.note-preview .find-preview-mark-active {
+  background: var(--matrix-green);
+  color: var(--matrix-bg);
+  box-shadow: 0 0 8px var(--matrix-green);
+  text-shadow: none;
+}
+
 .toolbar-btn.active {
   background: var(--matrix-green);
   color: var(--matrix-bg);

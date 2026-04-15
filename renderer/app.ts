@@ -16,6 +16,7 @@ let isPreviewMode: boolean = false;
 
 // Find state
 let findMatches: { start: number; end: number }[] = [];
+let findPreviewMatches: HTMLElement[] = [];
 let activeMatchIndex: number = -1;
 
 // DOM Elements
@@ -456,7 +457,6 @@ function togglePreview(): void {
       setStatus('> Open or write a note first.');
       return;
     }
-    hideFindBar();
     renderPreview();
     noteContentInput.style.display = 'none';
     notePreviewEl.style.display = 'block';
@@ -464,14 +464,27 @@ function togglePreview(): void {
     previewBtn.title = 'Edit (Ctrl+Shift+P)';
     isPreviewMode = true;
     setStatus('> Preview mode.');
+
+    findOverlay.innerHTML = '';
+    noteContentInput.classList.remove('searching');
+    if (findBar.style.display === 'flex') {
+      performFind();
+      findInput.focus();
+    }
   } else {
     notePreviewEl.style.display = 'none';
     noteContentInput.style.display = '';
     previewBtn.classList.remove('active');
     previewBtn.title = 'Markdown Viewer (Ctrl+Shift+P)';
     isPreviewMode = false;
-    noteContentInput.focus();
     setStatus('> Edit mode.');
+
+    if (findBar.style.display === 'flex') {
+      performFind();
+      findInput.focus();
+    } else {
+      noteContentInput.focus();
+    }
   }
 }
 
@@ -494,10 +507,16 @@ function showFindBar(): void {
   }
   findBar.style.display = 'flex';
   findInput.focus();
-  const selection = noteContentInput.value.substring(
-    noteContentInput.selectionStart || 0,
-    noteContentInput.selectionEnd || 0
-  );
+
+  let selection = '';
+  if (isPreviewMode) {
+    selection = window.getSelection()?.toString() || '';
+  } else {
+    selection = noteContentInput.value.substring(
+      noteContentInput.selectionStart || 0,
+      noteContentInput.selectionEnd || 0
+    );
+  }
   if (selection) {
     findInput.value = selection;
   }
@@ -509,19 +528,36 @@ function hideFindBar(): void {
   findInput.value = '';
   findMatchCount.textContent = '0 matches';
   findMatches = [];
+  findPreviewMatches = [];
   activeMatchIndex = -1;
   findOverlay.innerHTML = '';
   noteContentInput.classList.remove('searching');
-  noteContentInput.focus();
+  if (isPreviewMode) {
+    renderPreview();
+  } else {
+    noteContentInput.focus();
+  }
 }
 
 function performFind(): void {
   findMatches = [];
+  findPreviewMatches = [];
   activeMatchIndex = -1;
 
   const query = findInput.value;
   if (!query) {
     findMatchCount.textContent = '0 matches';
+    if (isPreviewMode) {
+      renderPreview();
+    } else {
+      findOverlay.innerHTML = '';
+      noteContentInput.classList.remove('searching');
+    }
+    return;
+  }
+
+  if (isPreviewMode) {
+    performFindInPreview(query);
     return;
   }
 
@@ -539,6 +575,56 @@ function performFind(): void {
   findMatchCount.textContent = `${findMatches.length} match${findMatches.length !== 1 ? 'es' : ''}`;
 
   renderFindHighlights();
+}
+
+function performFindInPreview(query: string): void {
+  renderPreview();
+
+  const caseSensitive = findCase.checked;
+  const searchQuery = caseSensitive ? query : query.toLowerCase();
+
+  const walker = document.createTreeWalker(notePreviewEl, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let current: Node | null;
+  while ((current = walker.nextNode())) {
+    textNodes.push(current as Text);
+  }
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue || '';
+    if (!text) continue;
+    const searchText = caseSensitive ? text : text.toLowerCase();
+
+    let idx = searchText.indexOf(searchQuery);
+    if (idx === -1) continue;
+
+    const parent = textNode.parentNode;
+    if (!parent) continue;
+
+    const fragment = document.createDocumentFragment();
+    let lastIdx = 0;
+
+    while (idx !== -1) {
+      if (idx > lastIdx) {
+        fragment.appendChild(document.createTextNode(text.substring(lastIdx, idx)));
+      }
+      const mark = document.createElement('mark');
+      mark.className = 'find-preview-mark';
+      mark.textContent = text.substring(idx, idx + query.length);
+      fragment.appendChild(mark);
+      findPreviewMatches.push(mark);
+      lastIdx = idx + query.length;
+      idx = searchText.indexOf(searchQuery, lastIdx);
+    }
+
+    if (lastIdx < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastIdx)));
+    }
+
+    parent.replaceChild(fragment, textNode);
+  }
+
+  findMatchCount.textContent = `${findPreviewMatches.length} match${findPreviewMatches.length !== 1 ? 'es' : ''}`;
 }
 
 function renderFindHighlights(): void {
@@ -590,17 +676,28 @@ function renderFindHighlights(): void {
 }
 
 function navigateFind(direction: number): void {
-  if (findMatches.length === 0) return;
+  const count = isPreviewMode ? findPreviewMatches.length : findMatches.length;
+  if (count === 0) return;
 
   activeMatchIndex += direction;
-  if (activeMatchIndex < 0) activeMatchIndex = findMatches.length - 1;
-  if (activeMatchIndex >= findMatches.length) activeMatchIndex = 0;
+  if (activeMatchIndex < 0) activeMatchIndex = count - 1;
+  if (activeMatchIndex >= count) activeMatchIndex = 0;
 
-  const match = findMatches[activeMatchIndex];
-  noteContentInput.setSelectionRange(match.start, match.end);
-  noteContentInput.focus();
+  if (isPreviewMode) {
+    findPreviewMatches.forEach((m, i) => {
+      m.classList.toggle('find-preview-mark-active', i === activeMatchIndex);
+    });
+    findPreviewMatches[activeMatchIndex].scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+  } else {
+    const match = findMatches[activeMatchIndex];
+    noteContentInput.setSelectionRange(match.start, match.end);
+    noteContentInput.focus();
+  }
 
-  findMatchCount.textContent = `${activeMatchIndex + 1}/${findMatches.length}`;
+  findMatchCount.textContent = `${activeMatchIndex + 1}/${count}`;
 }
 
 /**
