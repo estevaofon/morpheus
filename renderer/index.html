@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Matrix Notepad</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Custom Titlebar -->
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <span class="titlebar-icon">&#9632;</span>
+      <span class="titlebar-text">Matrix Notepad</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize">&#9472;</button>
+      <button class="titlebar-btn" id="btn-maximize">&#9633;</button>
+      <button class="titlebar-btn titlebar-close" id="btn-close">&#10005;</button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <button class="btn-new" id="btn-new">&#43; New Note</button>
+      </div>
+      <div class="sidebar-search">
+        <div class="search-wrapper">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="search-input" placeholder="> Search notes..." class="search-input">
+        </div>
+      </div>
+      <div class="notes-list" id="notes-list">
+        <!-- Notes populated by JS -->
+      </div>
+    </aside>
+
+    <!-- Editor Area -->
+    <main class="editor-area">
+      <!-- Editor Header -->
+      <div class="editor-header">
+        <input type="text" id="note-title" class="note-title-input" placeholder="> Note title...">
+        <div class="editor-toolbar">
+          <button class="toolbar-btn" id="btn-save" title="Save As">&#128190; Save As</button>
+          <button class="toolbar-btn" id="btn-delete" title="Delete">&#9746; Delete</button>
+        </div>
+      </div>
+
+      <!-- Find Bar -->
+      <div class="find-bar" id="find-bar" style="display: none;">
+        <span class="find-label">&#128269;</span>
+        <input type="text" id="find-input" class="find-input" placeholder="Find...">
+        <label class="find-case-label">
+          <input type="checkbox" id="find-case"> Aa
+        </label>
+        <span class="find-match-count" id="find-match-count">0 matches</span>
+        <button class="find-nav-btn" id="find-prev" title="Previous">&#9650;</button>
+        <button class="find-nav-btn" id="find-next" title="Next">&#9660;</button>
+        <button class="find-close-btn" id="find-close" title="Close">&#10005;</button>
+      </div>
+
+      <!-- Editor Content -->
+      <div class="editor-content-wrapper">
+        <div class="find-highlight-overlay" id="find-highlight-overlay"></div>
+        <textarea id="note-content" class="note-content" placeholder="> Begin typing..." spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <span id="status-text">Ready.</span>
+        <span id="char-count">0 chars</span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Matrix Rain Canvas -->
+  <canvas id="matrix-canvas"></canvas>
+
+  <script src="matrix-rain.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

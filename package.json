@@ -1,0 +1,31 @@
+{
+  "name": "matrix-notepad",
+  "version": "1.0.0",
+  "description": "A Matrix-themed desktop notepad built with Electron + TypeScript",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.renderer.json",
+    "start": "electron dist/main.js",
+    "dev": "concurrently \"tsc --watch\" \"tsc -p tsconfig.renderer.json --watch\" \"electron . --no-sandbox\"",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "electron": "^28.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.2.0",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.matrix-notepad.app",
+    "productName": "Matrix Notepad",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

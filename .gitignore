@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# User data (runtime do app)
+notes/
+
+# Ferramenta local
+.aru/
+
+# Logs / envs
+*.log
+npm-debug.log*
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
