@@ -65,8 +65,21 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => mainWindow?.close());
 
 // IPC Handlers — File Save As
-ipcMain.handle('file:saveAs', async (_event, content: string, existingPath?: string) => {
-  const defaultPath = existingPath && existingPath.trim() ? existingPath : 'Untitled.txt';
+ipcMain.handle('file:saveAs', async (_event, content: string, existingPath?: string, suggestedName?: string) => {
+  const trimmedName = suggestedName?.trim();
+  const hasExistingPath = !!(existingPath && existingPath.trim());
+
+  let defaultPath: string;
+  if (trimmedName && hasExistingPath) {
+    defaultPath = path.join(path.dirname(existingPath!), trimmedName);
+  } else if (hasExistingPath) {
+    defaultPath = existingPath!;
+  } else if (trimmedName) {
+    defaultPath = trimmedName;
+  } else {
+    defaultPath = 'Untitled.txt';
+  }
+
   const result = await dialog.showSaveDialog(mainWindow!, {
     title: 'Save As — Morpheus',
     defaultPath,

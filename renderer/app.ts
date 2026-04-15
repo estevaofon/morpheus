@@ -395,8 +395,16 @@ async function saveAsCurrentNote(): Promise<void> {
   const currentNote = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
   const existingPath = currentNote?.filePath;
 
+  // Pull the note title as a default filename for the dialog. If the title is
+  // currently just mirroring the existing file path (the default shown after a
+  // previous save) we skip it so we don't round-trip the full path as a name.
+  const rawTitle = noteTitleInput.value.trim();
+  const suggestedName = rawTitle && rawTitle !== existingPath
+    ? sanitizeFilename(rawTitle)
+    : undefined;
+
   try {
-    const result = await window.electronAPI.saveAs(content, existingPath);
+    const result = await window.electronAPI.saveAs(content, existingPath, suggestedName);
     if (result.success && result.filePath) {
       await applySaveResult(result.filePath, content);
       setStatus(`> Saved to ${result.filePath}`);
@@ -411,6 +419,13 @@ async function saveAsCurrentNote(): Promise<void> {
   }
 
   flashSaveBtn();
+}
+
+/**
+ * Strip characters that are invalid on Windows/macOS/Linux filenames.
+ */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().slice(0, 200);
 }
 
 /**

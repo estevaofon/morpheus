@@ -26,8 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window:close'),
 
   // File save
-  saveAs: (content: string, existingPath?: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
-    ipcRenderer.invoke('file:saveAs', content, existingPath),
+  saveAs: (content: string, existingPath?: string, suggestedName?: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
+    ipcRenderer.invoke('file:saveAs', content, existingPath, suggestedName),
   saveFile: (filePath: string, content: string): Promise<{ success: boolean; filePath: string | null; error?: string }> =>
     ipcRenderer.invoke('file:save', filePath, content),
   openFile: (): Promise<{ filePath: string; content: string } | { error: string } | null> =>
