@@ -94,6 +94,14 @@ noteTitleInput.addEventListener('blur', () => saveTitle());
 // Persist content on blur so nothing is lost when focus leaves the editor
 noteContentInput.addEventListener('blur', () => persistCurrentNote());
 
+// Keep the find highlight overlay scrolled in sync with the textarea.
+// Without this, the textarea scrolls but the (visible) overlay stays put —
+// so while search is active the scroll appears frozen.
+noteContentInput.addEventListener('scroll', () => {
+  findOverlay.scrollTop = noteContentInput.scrollTop;
+  findOverlay.scrollLeft = noteContentInput.scrollLeft;
+});
+
 // Find bar toggle
 findBtn?.addEventListener('click', () => showFindBar());
 findCloseBtn?.addEventListener('click', () => hideFindBar());
@@ -790,6 +798,8 @@ function renderFindHighlights(): void {
 
   findOverlay.innerHTML = result;
   noteContentInput.classList.add('searching');
+  findOverlay.scrollTop = noteContentInput.scrollTop;
+  findOverlay.scrollLeft = noteContentInput.scrollLeft;
 }
 
 function navigateFind(direction: number): void {

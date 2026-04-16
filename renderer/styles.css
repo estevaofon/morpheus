@@ -305,14 +305,14 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 20px;
+  padding: 20px 20px 20px 40px;
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.6;
   color: var(--matrix-green);
   white-space: pre-wrap;
   word-wrap: break-word;
-  overflow: auto;
+  overflow: hidden;
   pointer-events: none;
   z-index: 0;
 }
