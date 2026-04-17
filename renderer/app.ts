@@ -723,6 +723,14 @@ function performFind(): void {
   findMatchCount.textContent = `${findMatches.length} match${findMatches.length !== 1 ? 'es' : ''}`;
 
   renderFindHighlights();
+
+  if (findMatches.length > 0) {
+    activeMatchIndex = 0;
+    findMatchCount.textContent = `1/${findMatches.length}`;
+    const match = findMatches[0];
+    noteContentInput.setSelectionRange(match.start, match.end);
+    scrollToActiveMatch();
+  }
 }
 
 function performFindInPreview(query: string): void {
@@ -773,6 +781,13 @@ function performFindInPreview(query: string): void {
   }
 
   findMatchCount.textContent = `${findPreviewMatches.length} match${findPreviewMatches.length !== 1 ? 'es' : ''}`;
+
+  if (findPreviewMatches.length > 0) {
+    activeMatchIndex = 0;
+    findMatchCount.textContent = `1/${findPreviewMatches.length}`;
+    findPreviewMatches[0].classList.add('find-preview-mark-active');
+    findPreviewMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function renderFindHighlights(): void {
@@ -845,9 +860,27 @@ function navigateFind(direction: number): void {
     const match = findMatches[activeMatchIndex];
     noteContentInput.setSelectionRange(match.start, match.end);
     noteContentInput.focus();
+    scrollToActiveMatch();
   }
 
   findMatchCount.textContent = `${activeMatchIndex + 1}/${count}`;
+}
+
+// Textareas don't auto-scroll to setSelectionRange. Use the <mark> the overlay
+// already rendered to compute the match's y-offset and center it in the viewport.
+function scrollToActiveMatch(): void {
+  if (activeMatchIndex < 0) return;
+  const marks = findOverlay.querySelectorAll('mark');
+  const active = marks[activeMatchIndex] as HTMLElement | undefined;
+  if (!active) return;
+
+  const markRect = active.getBoundingClientRect();
+  const overlayRect = findOverlay.getBoundingClientRect();
+  const markTopWithinOverlay = markRect.top - overlayRect.top + findOverlay.scrollTop;
+  const viewHeight = noteContentInput.clientHeight;
+  const target = markTopWithinOverlay - viewHeight / 2 + markRect.height / 2;
+
+  noteContentInput.scrollTop = Math.max(0, target);
 }
 
 // ============================================
