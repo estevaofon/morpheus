@@ -73,6 +73,26 @@ Shift-clicking the **Save** button also forces Save As.
 
 The root `tsconfig.json` compiles `src/` to `dist/`; `tsconfig.renderer.json` compiles `renderer/*.ts` to JS alongside the sources. `electron-builder` packages for Windows as both an NSIS installer and a portable executable (see `build.win.target` in `package.json`).
 
+### Building your own executable
+
+Prerequisites: Node.js 18+ and npm. On Windows, run the commands below from PowerShell or Git Bash at the repo root.
+
+```bash
+npm install        # first time only
+npm run build      # compile TypeScript (main + renderer)
+npm run package    # run electron-builder
+```
+
+Artifacts land in `release/`:
+
+- `Morpheus Setup <version>.exe` — NSIS installer (adds Start Menu shortcut, supports uninstall)
+- `Morpheus <version>.exe` — portable single-file executable (no install required)
+- `release/win-unpacked/` — raw unpacked app directory, useful for debugging the packaged build
+
+The version in the filenames comes from `version` in `package.json`. Targets are defined in `build.win.target`; remove `portable` or `nsis` there to produce only one of them. To build for macOS or Linux, add the matching `build.mac` / `build.linux` entries and run `npm run package` on that platform (electron-builder does not cross-compile Windows installers from other OSes without extra setup).
+
+A custom icon can be set via `build.win.icon` pointing to a `.ico` file (256×256 recommended); otherwise the default Electron icon is used.
+
 ## Security
 
 - Renderer runs with `contextIsolation: true` and `nodeIntegration: false`; all access to Node APIs goes through the preload bridge.

@@ -68,6 +68,7 @@
 
       <!-- Editor Content -->
       <div class="editor-content-wrapper">
+        <div class="line-numbers" id="line-numbers" aria-hidden="true">1</div>
         <div class="find-highlight-overlay" id="find-highlight-overlay"></div>
         <textarea id="note-content" class="note-content" placeholder="> Begin typing..." spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
         <div id="note-preview" class="note-preview" style="display: none;"></div>
@@ -76,7 +77,10 @@
       <!-- Status Bar -->
       <div class="status-bar">
         <span id="status-text">Ready.</span>
-        <span id="char-count">0 chars</span>
+        <div class="status-metrics">
+          <span id="line-count" class="status-metric">0 lines</span>
+          <span id="char-count" class="status-metric">0 chars</span>
+        </div>
       </div>
     </main>
   </div>

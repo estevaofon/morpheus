@@ -29,6 +29,21 @@ const notePreviewEl = document.getElementById('note-preview') as HTMLDivElement;
 const previewBtn = document.getElementById('btn-preview') as HTMLButtonElement;
 const statusText = document.getElementById('status-text')!;
 const charCount = document.getElementById('char-count')!;
+const lineCount = document.getElementById('line-count')!;
+const lineNumbersEl = document.getElementById('line-numbers')!;
+
+function updateCounts(text: string): void {
+  charCount.textContent = `${text.length} chars`;
+  const lines = text.length === 0 ? 1 : text.split(/\r\n|\r|\n/).length;
+  lineCount.textContent = `${lines} lines`;
+  renderLineNumbers(lines);
+}
+
+function renderLineNumbers(count: number): void {
+  const parts = new Array(count);
+  for (let i = 0; i < count; i++) parts[i] = String(i + 1);
+  lineNumbersEl.textContent = parts.join('\n');
+}
 
 // Confirm modal elements
 const confirmModal = document.getElementById('confirm-modal') as HTMLDivElement;
@@ -122,10 +137,14 @@ findNextBtn?.addEventListener('click', () => navigateFind(1));
 
 // Character count + auto-create note on first keystroke
 noteContentInput.addEventListener('input', () => {
-  charCount.textContent = `${noteContentInput.value.length} chars`;
+  updateCounts(noteContentInput.value);
   if (noteContentInput.value) void ensureActiveNote();
   // Re-run find if find bar is open
   if (findBar.style.display === 'flex') performFind();
+});
+
+noteContentInput.addEventListener('scroll', () => {
+  lineNumbersEl.scrollTop = noteContentInput.scrollTop;
 });
 
 // Tab key inserts 2 spaces instead of changing focus
@@ -285,7 +304,7 @@ async function selectNote(id: string): Promise<void> {
   if (note) {
     noteTitleInput.value = note.title;
     noteContentInput.value = note.content;
-    charCount.textContent = `${note.content.length} chars`;
+    updateCounts(note.content);
     renderNotesList(searchInput.value.toLowerCase());
     setStatus(`> Viewing: ${note.title}`);
     hideFindBar();
@@ -534,7 +553,7 @@ async function deleteCurrentNote(): Promise<void> {
     activeNoteId = null;
     noteTitleInput.value = '';
     noteContentInput.value = '';
-    charCount.textContent = '0 chars';
+    updateCounts('');
     renderNotesList(searchInput.value.toLowerCase());
     noteTitleInput.focus();
     setStatus('> Note deleted. No notes in the Matrix.');
@@ -557,6 +576,8 @@ function togglePreview(): void {
     previewBtn.classList.add('active');
     previewBtn.title = 'Edit (Ctrl+Shift+P)';
     isPreviewMode = true;
+    lineCount.style.display = 'none';
+    lineNumbersEl.style.display = 'none';
     setStatus('> Preview mode.');
 
     findOverlay.innerHTML = '';
@@ -571,6 +592,8 @@ function togglePreview(): void {
     previewBtn.classList.remove('active');
     previewBtn.title = 'Markdown Viewer (Ctrl+Shift+P)';
     isPreviewMode = false;
+    lineCount.style.display = '';
+    lineNumbersEl.style.display = '';
     setStatus('> Edit mode.');
 
     if (findBar.style.display === 'flex') {

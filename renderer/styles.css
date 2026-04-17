@@ -299,13 +299,36 @@ html, body {
   overflow: hidden;
 }
 
+.line-numbers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  padding: 20px 8px 20px 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--matrix-dim-green);
+  opacity: 1;
+  text-align: right;
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  border-right: 1px solid var(--matrix-border);
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
 .find-highlight-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 20px 20px 20px 40px;
+  padding: 20px 20px 20px 60px;
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.6;
@@ -338,7 +361,7 @@ html, body {
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.6;
-  padding: 20px 20px 20px 40px;
+  padding: 20px 20px 20px 60px;
   resize: none;
   outline: none;
   position: relative;
@@ -596,6 +619,17 @@ html, body {
   font-size: 11px;
   color: var(--matrix-dim-green);
   background: var(--matrix-bg-secondary);
+}
+
+.status-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.75;
+}
+
+.status-metric {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================
