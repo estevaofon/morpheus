@@ -56,6 +56,7 @@ const preferencesBtn = document.getElementById('btn-preferences') as HTMLButtonE
 const preferencesModal = document.getElementById('preferences-modal') as HTMLDivElement;
 const preferencesModalClose = document.getElementById('preferences-modal-close') as HTMLButtonElement;
 const fontColorRadios = document.querySelectorAll<HTMLInputElement>('input[name="pref-font-color"]');
+const themeRadios = document.querySelectorAll<HTMLInputElement>('input[name="pref-theme"]');
 
 // Find bar elements
 const findBar = document.getElementById('find-bar') as HTMLDivElement;
@@ -226,6 +227,18 @@ fontColorRadios.forEach(radio => {
       prefs.fontColor = color;
       savePreferences(prefs);
       applyFontColor(color);
+    }
+  });
+});
+
+themeRadios.forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) {
+      const theme: Theme = radio.value === 'vscode' ? 'vscode' : 'matrix';
+      const prefs = loadPreferences();
+      prefs.theme = theme;
+      savePreferences(prefs);
+      applyTheme(theme);
     }
   });
 });
@@ -888,25 +901,30 @@ function scrollToActiveMatch(): void {
 // ============================================
 
 type FontColor = 'green' | 'white';
+type Theme = 'matrix' | 'vscode';
 interface Preferences {
   fontColor: FontColor;
+  theme: Theme;
 }
 
 const PREFS_KEY = 'morpheus:preferences';
+const DEFAULT_PREFS: Preferences = { fontColor: 'green', theme: 'matrix' };
 
 function loadPreferences(): Preferences {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && (parsed.fontColor === 'green' || parsed.fontColor === 'white')) {
-        return { fontColor: parsed.fontColor };
-      }
+      const fontColor: FontColor =
+        parsed?.fontColor === 'white' ? 'white' : 'green';
+      const theme: Theme =
+        parsed?.theme === 'vscode' ? 'vscode' : 'matrix';
+      return { fontColor, theme };
     }
   } catch {
     // fall through to defaults
   }
-  return { fontColor: 'green' };
+  return { ...DEFAULT_PREFS };
 }
 
 function savePreferences(prefs: Preferences): void {
@@ -921,9 +939,14 @@ function applyFontColor(color: FontColor): void {
   document.body.classList.toggle('font-color-white', color === 'white');
 }
 
+function applyTheme(theme: Theme): void {
+  document.body.classList.toggle('theme-vscode', theme === 'vscode');
+}
+
 function showPreferences(): void {
   const prefs = loadPreferences();
   fontColorRadios.forEach(r => { r.checked = r.value === prefs.fontColor; });
+  themeRadios.forEach(r => { r.checked = r.value === prefs.theme; });
   preferencesModal.style.display = 'flex';
   preferencesModalClose.focus();
 }
@@ -1028,5 +1051,7 @@ window.mermaid.initialize({
     edgeLabelBackground: '#000000',
   },
 });
-applyFontColor(loadPreferences().fontColor);
+const initialPrefs = loadPreferences();
+applyFontColor(initialPrefs.fontColor);
+applyTheme(initialPrefs.theme);
 loadNotes();

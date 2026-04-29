@@ -995,6 +995,16 @@ html, body {
   box-shadow: 0 0 4px #ffffff;
 }
 
+.preferences-swatch[data-theme="matrix"] {
+  background: linear-gradient(135deg, #000000 50%, #00ff41 50%);
+  box-shadow: 0 0 4px #00ff41;
+}
+
+.preferences-swatch[data-theme="vscode"] {
+  background: linear-gradient(135deg, #1e1e1e 50%, #007acc 50%);
+  box-shadow: 0 0 4px #007acc;
+}
+
 /* ============================================
    FONT COLOR: WHITE
    Overrides the note editing/preview text color
@@ -1029,3 +1039,404 @@ body.font-color-white .find-highlight-overlay {
 /* ============================================
    ANIMATIONS — removed flicker
    ============================================ */
+
+/* ============================================
+   THEME: VS CODE DARK+
+   Overrides matrix variables and tweaks elements
+   that hardcoded colors outside the variable system.
+   ============================================ */
+body.theme-vscode {
+  --matrix-green: #d4d4d4;
+  --matrix-dark-green: #cccccc;
+  --matrix-dim-green: #858585;
+  --matrix-bg: #1e1e1e;
+  --matrix-bg-secondary: #252526;
+  --matrix-border: #3c3c3c;
+  --matrix-glow: 0 0 0 1px #007acc55;
+  --matrix-text-shadow: none;
+  --vscode-accent: #007acc;
+  --vscode-accent-hover: #1f8ad2;
+  --vscode-selection: #264f78;
+  --vscode-titlebar: #3c3c3c;
+  --vscode-statusbar: #007acc;
+  --vscode-active-line: #2a2d2e;
+  --vscode-search-match: #613214;
+  --vscode-search-active: #515c6a;
+}
+
+body.theme-vscode .titlebar {
+  background: var(--vscode-titlebar);
+  border-bottom-color: #2d2d30;
+}
+
+body.theme-vscode .titlebar-icon,
+body.theme-vscode .titlebar-brand,
+body.theme-vscode .titlebar-btn {
+  color: #cccccc;
+  text-shadow: none;
+  filter: none;
+}
+
+body.theme-vscode .titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+body.theme-vscode .titlebar-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+body.theme-vscode .btn-new {
+  background: var(--vscode-accent);
+  border-color: var(--vscode-accent);
+  color: #ffffff;
+  text-shadow: none;
+  border-radius: 2px;
+}
+
+body.theme-vscode .btn-new:hover {
+  background: var(--vscode-accent-hover);
+  border-color: var(--vscode-accent-hover);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+body.theme-vscode .search-input,
+body.theme-vscode .find-input {
+  background: #3c3c3c;
+  color: #cccccc;
+  border-radius: 2px;
+}
+
+body.theme-vscode .search-input:focus,
+body.theme-vscode .find-input:focus {
+  border-color: var(--vscode-accent);
+  box-shadow: 0 0 0 1px var(--vscode-accent);
+}
+
+body.theme-vscode .note-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: transparent;
+}
+
+body.theme-vscode .note-item.active {
+  background: var(--vscode-selection);
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--vscode-accent);
+}
+
+body.theme-vscode .note-item-title {
+  color: #cccccc;
+  font-weight: 600;
+}
+
+body.theme-vscode .note-item-preview {
+  color: #858585;
+}
+
+body.theme-vscode .note-item-date {
+  color: #6a6a6a;
+}
+
+body.theme-vscode .note-title-input {
+  color: #d4d4d4;
+}
+
+body.theme-vscode .note-title-input:focus {
+  border-bottom-color: var(--vscode-accent);
+  box-shadow: 0 1px 0 var(--vscode-accent);
+}
+
+body.theme-vscode .toolbar-btn {
+  background: #0e639c;
+  border-color: #0e639c;
+  color: #ffffff;
+  border-radius: 2px;
+}
+
+body.theme-vscode .toolbar-btn:hover {
+  background: #1177bb;
+  border-color: #1177bb;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+body.theme-vscode .toolbar-btn.active {
+  background: var(--vscode-accent);
+  border-color: var(--vscode-accent);
+  color: #ffffff;
+  text-shadow: none;
+  box-shadow: none;
+}
+
+body.theme-vscode .line-numbers {
+  color: #858585;
+  border-right-color: transparent;
+}
+
+body.theme-vscode .note-content {
+  color: #d4d4d4;
+  caret-color: #aeafad;
+}
+
+body.theme-vscode .note-content::selection {
+  background: var(--vscode-selection);
+  color: inherit;
+}
+
+body.theme-vscode .find-highlight-overlay {
+  color: #d4d4d4;
+}
+
+body.theme-vscode .find-highlight-overlay mark {
+  background: var(--vscode-search-match);
+  color: #d4d4d4;
+  font-weight: normal;
+  border-radius: 0;
+}
+
+body.theme-vscode .note-preview {
+  color: #d4d4d4;
+}
+
+body.theme-vscode .note-preview h1,
+body.theme-vscode .note-preview h2,
+body.theme-vscode .note-preview h3,
+body.theme-vscode .note-preview h4,
+body.theme-vscode .note-preview h5,
+body.theme-vscode .note-preview h6 {
+  color: #569cd6;
+  text-shadow: none;
+}
+
+body.theme-vscode .note-preview h1 {
+  border-bottom-color: #3c3c3c;
+}
+
+body.theme-vscode .note-preview h2 {
+  border-bottom-color: #3c3c3c;
+}
+
+body.theme-vscode .note-preview a {
+  color: #3794ff;
+  text-shadow: none;
+}
+
+body.theme-vscode .note-preview a:hover {
+  background: transparent;
+  color: #4daafc;
+  text-decoration: underline;
+}
+
+body.theme-vscode .note-preview strong {
+  color: #d4d4d4;
+  text-shadow: none;
+}
+
+body.theme-vscode .note-preview em {
+  color: #d4d4d4;
+}
+
+body.theme-vscode .note-preview code {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #3c3c3c;
+  color: #ce9178;
+}
+
+body.theme-vscode .note-preview pre {
+  background: #1e1e1e;
+  border-color: #3c3c3c;
+  border-left-color: var(--vscode-accent);
+  box-shadow: none;
+}
+
+body.theme-vscode .note-preview pre code {
+  color: #d4d4d4;
+}
+
+body.theme-vscode .note-preview blockquote {
+  border-left-color: #608b4e;
+  background: rgba(96, 139, 78, 0.08);
+  color: #cccccc;
+}
+
+body.theme-vscode .note-preview ul li::marker,
+body.theme-vscode .note-preview ol li::marker {
+  color: #858585;
+}
+
+body.theme-vscode .note-preview hr {
+  border-top-color: #3c3c3c;
+}
+
+body.theme-vscode .note-preview th {
+  background: #2d2d30;
+  color: #d4d4d4;
+  text-shadow: none;
+}
+
+body.theme-vscode .note-preview tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.theme-vscode .note-preview .find-preview-mark {
+  background: var(--vscode-search-match);
+  color: #d4d4d4;
+  font-weight: normal;
+}
+
+body.theme-vscode .note-preview .find-preview-mark-active {
+  background: var(--vscode-search-active);
+  color: #ffffff;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+body.theme-vscode .note-preview .mermaid-diagram {
+  background: #1e1e1e;
+  border-color: #3c3c3c;
+}
+
+body.theme-vscode .status-bar {
+  background: var(--vscode-statusbar);
+  color: #ffffff;
+  border-top-color: var(--vscode-statusbar);
+}
+
+body.theme-vscode .status-metrics {
+  opacity: 1;
+  color: #ffffff;
+}
+
+body.theme-vscode #matrix-canvas {
+  display: none;
+}
+
+body.theme-vscode ::-webkit-scrollbar {
+  width: 14px;
+}
+
+body.theme-vscode ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.theme-vscode ::-webkit-scrollbar-thumb {
+  background: rgba(121, 121, 121, 0.4);
+  border-radius: 0;
+}
+
+body.theme-vscode ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.7);
+}
+
+body.theme-vscode .modal-box {
+  background: #252526;
+  border-color: #454545;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+body.theme-vscode .modal-message {
+  color: #cccccc;
+  text-shadow: none;
+}
+
+body.theme-vscode .modal-btn {
+  background: #0e639c;
+  border-color: #0e639c;
+  color: #ffffff;
+}
+
+body.theme-vscode .modal-btn:hover,
+body.theme-vscode .modal-btn:focus {
+  background: #1177bb;
+  border-color: #1177bb;
+  box-shadow: none;
+  outline: 1px solid var(--vscode-accent);
+}
+
+body.theme-vscode .modal-btn-danger {
+  background: transparent;
+  color: #f48771;
+  border-color: #f48771;
+}
+
+body.theme-vscode .modal-btn-danger:hover,
+body.theme-vscode .modal-btn-danger:focus {
+  background: #5a1d1d;
+  border-color: #f48771;
+  box-shadow: none;
+}
+
+body.theme-vscode .preferences-header {
+  color: #cccccc;
+  text-shadow: none;
+  border-bottom-color: #3c3c3c;
+}
+
+body.theme-vscode .preferences-label {
+  color: #858585;
+}
+
+body.theme-vscode .preferences-option {
+  background: rgba(255, 255, 255, 0.03);
+  color: #cccccc;
+}
+
+body.theme-vscode .preferences-option:hover {
+  border-color: var(--vscode-accent);
+  box-shadow: none;
+}
+
+body.theme-vscode .preferences-option:has(input:checked) {
+  border-color: var(--vscode-accent);
+  background: rgba(0, 122, 204, 0.15);
+  box-shadow: none;
+}
+
+body.theme-vscode .find-bar {
+  background: #252526;
+}
+
+body.theme-vscode .find-label {
+  color: #cccccc;
+  filter: none;
+}
+
+body.theme-vscode .find-match-count,
+body.theme-vscode .find-case-label {
+  color: #cccccc;
+}
+
+body.theme-vscode .find-nav-btn,
+body.theme-vscode .find-close-btn {
+  background: transparent;
+  border-color: #3c3c3c;
+  color: #cccccc;
+}
+
+body.theme-vscode .find-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--vscode-accent);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+body.theme-vscode .find-close-btn:hover {
+  background: rgba(232, 17, 35, 0.7);
+  border-color: #e81123;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+body.theme-vscode .search-highlight {
+  background: var(--vscode-search-active);
+  color: #ffffff;
+}
+
+/* When VSCode theme is on, override font-color-white so it stays cohesive */
+body.theme-vscode.font-color-white .note-content,
+body.theme-vscode.font-color-white .note-preview,
+body.theme-vscode.font-color-white .note-title-input {
+  color: #ffffff;
+}
