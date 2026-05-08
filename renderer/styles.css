@@ -441,7 +441,8 @@ button {
   padding: 20px 10px 20px 0;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.65;
+  /* Integer line-height — see .note-content for rationale. */
+  line-height: 22px;
   color: var(--text-muted);
   text-align: right;
   white-space: pre;
@@ -453,35 +454,9 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.find-highlight-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px 24px 20px 64px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.find-highlight-overlay mark {
-  background: var(--highlight-bg);
-  color: inherit;
-  border-radius: 2px;
-}
-
-.note-content.searching {
-  color: transparent;
-  caret-color: var(--text-primary);
-}
-
+/* ============================================
+   EDITOR (contenteditable div)
+   ============================================ */
 .note-content {
   width: 100%;
   height: 100%;
@@ -490,22 +465,67 @@ button {
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 22px;
   padding: 20px 24px 20px 64px;
-  resize: none;
   outline: none;
   position: relative;
   z-index: 1;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  caret-color: var(--text-primary);
+  /* Editing happens IN this element — same DOM is what gets rendered,
+     so syntax-highlighted spans line up with the caret by construction.
+     This is why VSCode and most real editors don't try to overlay a
+     <textarea> with a colored layer: they make the rendered DOM the
+     source of truth. */
 }
 
-.note-content::placeholder {
+/* Python files: turn off soft-wrap so each logical line is one visual
+   line, like a normal code editor. */
+.note-content.python-mode {
+  white-space: pre;
+}
+
+/* Native textarea has ::placeholder; a contenteditable div doesn't, so
+   fake it with ::before keyed off :empty. */
+.note-content:empty::before {
+  content: attr(data-placeholder);
   color: var(--text-muted);
+  pointer-events: none;
 }
 
-.note-content::selection {
+.note-content::selection,
+.note-content *::selection {
   background: var(--selection-bg);
   color: inherit;
 }
+
+/* Inline find marks — applied directly into the contenteditable as
+   <mark> spans wrapping matching ranges. */
+.note-content mark.find-mark {
+  background: var(--highlight-bg);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.note-content mark.find-mark-active {
+  background: var(--highlight-active);
+  color: #18181b;
+  border-radius: 2px;
+}
+
+/* Morpheus token palette (default) */
+.tok-comment   { color: #6b7280; font-style: italic; }
+.tok-string    { color: #fbbf24; }
+.tok-number    { color: #fb923c; }
+.tok-keyword   { color: #c084fc; font-weight: 500; }
+.tok-builtin   { color: #93c5fd; }
+.tok-self      { color: #f472b6; font-style: italic; }
+.tok-decorator { color: #f472b6; }
+.tok-function  { color: #38bdf8; }
+.tok-class     { color: #5eead4; }
+.tok-operator  { color: #a1a1aa; }
 
 /* ============================================
    MARKDOWN PREVIEW
@@ -1122,16 +1142,8 @@ body.font-color-white .note-content {
   caret-color: #ffffff;
 }
 
-body.font-color-white .note-content.searching {
-  color: transparent;
-}
-
 body.font-color-white .note-preview * {
   color: inherit;
-}
-
-body.font-color-white .find-highlight-overlay {
-  color: #ffffff;
 }
 
 /* ============================================
@@ -1237,13 +1249,21 @@ body.theme-vscode .status-metric {
   color: #ffffff;
 }
 
-body.theme-vscode .find-highlight-overlay mark {
-  background: var(--highlight-bg);
-  color: var(--text-primary);
-}
 
 body.theme-vscode.font-color-white .note-content,
 body.theme-vscode.font-color-white .note-preview,
 body.theme-vscode.font-color-white .note-title-input {
   color: #ffffff;
 }
+
+/* VS Code Dark+ token palette (canonical colors) */
+body.theme-vscode .tok-comment   { color: #6a9955; font-style: italic; }
+body.theme-vscode .tok-string    { color: #ce9178; font-style: normal; }
+body.theme-vscode .tok-number    { color: #b5cea8; }
+body.theme-vscode .tok-keyword   { color: #c586c0; font-weight: 400; }
+body.theme-vscode .tok-builtin   { color: #4ec9b0; }
+body.theme-vscode .tok-self      { color: #569cd6; font-style: italic; }
+body.theme-vscode .tok-decorator { color: #dcdcaa; }
+body.theme-vscode .tok-function  { color: #dcdcaa; }
+body.theme-vscode .tok-class     { color: #4ec9b0; }
+body.theme-vscode .tok-operator  { color: #d4d4d4; }

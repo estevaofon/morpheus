@@ -7,6 +7,10 @@ export interface Note {
   filePath?: string;
 }
 
+export type ExternalFilePayload =
+  | { filePath: string; content: string }
+  | { filePath: string; error: string };
+
 export interface ElectronAPI {
   // Notes CRUD
   listNotes(): Promise<Note[]>;
@@ -26,6 +30,9 @@ export interface ElectronAPI {
   openFile(): Promise<{ filePath: string; content: string } | { error: string } | null>;
   setNoteFilePath(id: string, filePath: string): Promise<Note | null>;
   findNoteByFilePath(filePath: string): Promise<Note | null>;
+
+  // External file open
+  onOpenExternalFile(callback: (payload: ExternalFilePayload) => void): () => void;
 }
 
 declare global {

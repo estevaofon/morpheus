@@ -1,4 +1,8 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+
+export type ExternalFilePayload =
+  | { filePath: string; content: string }
+  | { filePath: string; error: string };
 
 export interface Note {
   id: string;
@@ -36,4 +40,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('notes:setFilePath', id, filePath),
   findNoteByFilePath: (filePath: string): Promise<Note | null> =>
     ipcRenderer.invoke('notes:findByFilePath', filePath),
+
+  // External file open (Windows shell context menu / CLI argument)
+  onOpenExternalFile: (callback: (payload: ExternalFilePayload) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, payload: ExternalFilePayload) => callback(payload);
+    ipcRenderer.on('file:openExternal', listener);
+    return () => ipcRenderer.removeListener('file:openExternal', listener);
+  },
 });

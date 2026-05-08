@@ -16,6 +16,32 @@ function toEditorLineEndings(text: string): string {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let pendingFileToOpen: string | null = null;
+
+function extractFilePathFromArgv(argv: string[]): string | null {
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg || arg === '.' || arg.startsWith('-')) continue;
+    try {
+      if (fs.existsSync(arg) && fs.statSync(arg).isFile()) {
+        return path.resolve(arg);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function sendFileToRenderer(filePath: string): void {
+  if (!mainWindow) return;
+  try {
+    const content = toEditorLineEndings(fs.readFileSync(filePath, 'utf-8'));
+    mainWindow.webContents.send('file:openExternal', { filePath, content });
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  } catch (err) {
+    mainWindow.webContents.send('file:openExternal', { filePath, error: String(err) });
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -34,6 +60,14 @@ function createWindow(): void {
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (pendingFileToOpen) {
+      const filePath = pendingFileToOpen;
+      pendingFileToOpen = null;
+      sendFileToRenderer(filePath);
+    }
+  });
 
   mainWindow.webContents.on('context-menu', (_event, params) => {
     const { editFlags, isEditable, selectionText } = params;
@@ -60,17 +94,35 @@ function createWindow(): void {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const filePath = extractFilePathFromArgv(argv);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      if (filePath) sendFileToRenderer(filePath);
+    } else if (filePath) {
+      pendingFileToOpen = filePath;
+    }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+  pendingFileToOpen = extractFilePathFromArgv(process.argv);
+
+  app.whenReady().then(() => {
+    createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
 
 // IPC Handlers — Notes
 ipcMain.handle('notes:list', async () => {

@@ -36,7 +36,8 @@
     },
     "nsis": {
       "installerIcon": "output.ico",
-      "uninstallerIcon": "output.ico"
+      "uninstallerIcon": "output.ico",
+      "include": "build/installer.nsh"
     },
     "files": [
       "dist/**/*",

@@ -16,21 +16,230 @@ let isPreviewMode: boolean = false;
 let inFlightCreate: Promise<void> | null = null;
 
 // Find state
-let findMatches: { start: number; end: number }[] = [];
-let findPreviewMatches: HTMLElement[] = [];
 let activeMatchIndex: number = -1;
 
 // DOM Elements
 const notesListEl = document.getElementById('notes-list')!;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
 const noteTitleInput = document.getElementById('note-title') as HTMLInputElement;
-const noteContentInput = document.getElementById('note-content') as HTMLTextAreaElement;
+const noteContentInput = document.getElementById('note-content') as HTMLDivElement;
 const notePreviewEl = document.getElementById('note-preview') as HTMLDivElement;
 const previewBtn = document.getElementById('btn-preview') as HTMLButtonElement;
 const statusText = document.getElementById('status-text')!;
 const charCount = document.getElementById('char-count')!;
 const lineCount = document.getElementById('line-count')!;
 const lineNumbersEl = document.getElementById('line-numbers')!;
+
+// ============================================
+// EDITOR ABSTRACTION (contenteditable div)
+// ============================================
+// Like VSCode, the visible editor IS the rendered DOM. We don't overlay a
+// transparent <textarea> on top of a colored layer — clicks land on the
+// same nodes that show the syntax highlighting, so caret positioning is
+// always pixel-correct.
+
+/** Read the editor's text content (works whether it's plain text or has token spans). */
+function getEditorValue(): string {
+  return getTextFromContenteditable(noteContentInput);
+}
+
+/**
+ * Reading textContent from a contenteditable concatenates child text nodes,
+ * but doesn't reliably emit "\n" between block-level children that the
+ * browser may insert (e.g., a <div> per line on Enter). plaintext-only
+ * mostly avoids that, but we still normalize defensively.
+ */
+function getTextFromContenteditable(el: HTMLElement): string {
+  return el.textContent ?? '';
+}
+
+/** Replace the editor's content with plain text (clears any HTML). */
+function setEditorValue(text: string): void {
+  noteContentInput.textContent = text;
+}
+
+/** Replace the editor's content with HTML (used to apply syntax highlighting). */
+function setEditorHTML(html: string): void {
+  noteContentInput.innerHTML = html;
+}
+
+/**
+ * Get the caret as character offsets relative to the editor's full text.
+ * Uses Range#toString() length — unlike Node iteration this matches what
+ * textContent reports, so saving and restoring through tokenization is
+ * idempotent for non-collapsed selections too.
+ */
+function getCaretOffset(): { start: number; end: number } {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return { start: 0, end: 0 };
+  const range = sel.getRangeAt(0);
+  if (!noteContentInput.contains(range.startContainer)) return { start: 0, end: 0 };
+
+  const preStart = range.cloneRange();
+  preStart.selectNodeContents(noteContentInput);
+  preStart.setEnd(range.startContainer, range.startOffset);
+  const start = preStart.toString().length;
+
+  const preEnd = range.cloneRange();
+  preEnd.selectNodeContents(noteContentInput);
+  preEnd.setEnd(range.endContainer, range.endOffset);
+  const end = preEnd.toString().length;
+
+  return { start, end };
+}
+
+/**
+ * Place the caret at character offset(s) within the editor. Walks text
+ * nodes in document order, charging their lengths against the target
+ * offsets. If the requested offset is beyond the end of the content, we
+ * collapse at the end instead of throwing.
+ */
+function setCaretOffset(start: number, end: number = start): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+
+  let charCount = 0;
+  let startSet = false;
+  let endSet = false;
+
+  function visit(node: Node): void {
+    if (startSet && endSet) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node.textContent ?? '').length;
+      const next = charCount + len;
+      if (!startSet && next >= start) {
+        range.setStart(node, Math.max(0, start - charCount));
+        startSet = true;
+      }
+      if (!endSet && next >= end) {
+        range.setEnd(node, Math.max(0, end - charCount));
+        endSet = true;
+      }
+      charCount = next;
+      return;
+    }
+    for (const child of Array.from(node.childNodes)) {
+      visit(child);
+      if (startSet && endSet) return;
+    }
+  }
+  visit(noteContentInput);
+
+  if (!startSet) {
+    range.selectNodeContents(noteContentInput);
+    range.collapse(false);
+  } else if (!endSet) {
+    range.setEnd(range.startContainer, range.startOffset);
+  }
+
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// ============================================
+// UNDO / REDO
+// ============================================
+// Re-setting innerHTML to apply syntax highlighting wipes the browser's
+// native undo history, so Ctrl+Z stops working. We maintain our own
+// snapshot stack instead — one snapshot per "burst" of typing (coalesced
+// by a 500ms idle window) so pressing undo rewinds to the start of the
+// last edit, not character by character.
+
+interface UndoSnapshot {
+  value: string;
+  caretStart: number;
+  caretEnd: number;
+}
+
+const UNDO_LIMIT = 200;
+const UNDO_COALESCE_MS = 500;
+let undoStack: UndoSnapshot[] = [];
+let redoStack: UndoSnapshot[] = [];
+let lastSnapshotTime = 0;
+
+/** Capture the editor's current state into the undo stack (no coalescing). */
+function snapshotEditorState(): void {
+  const value = getEditorValue();
+  const caret = getCaretOffset();
+  // Always update the timestamp — including on no-op snapshots — so
+  // back-to-back keystrokes coalesce instead of each one re-entering the
+  // "stale, snapshot now" branch of maybeSnapshotForBurst.
+  lastSnapshotTime = Date.now();
+  const top = undoStack[undoStack.length - 1];
+  if (top && top.value === value) return;
+  undoStack.push({ value, caretStart: caret.start, caretEnd: caret.end });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+}
+
+/**
+ * Snapshot iff we haven't snapshotted recently — called from beforeinput
+ * so the first keystroke of a burst captures the pre-edit state, then
+ * subsequent keystrokes within 500ms are absorbed into that one undo step.
+ */
+function maybeSnapshotForBurst(): void {
+  const now = Date.now();
+  if (now - lastSnapshotTime < UNDO_COALESCE_MS && undoStack.length > 0) {
+    lastSnapshotTime = now;
+    return;
+  }
+  snapshotEditorState();
+}
+
+/** Reset the stack to a single baseline snapshot (used on note load). */
+function resetUndoTo(value: string, caretStart = 0, caretEnd = 0): void {
+  undoStack = [{ value, caretStart, caretEnd }];
+  redoStack = [];
+  lastSnapshotTime = 0;
+}
+
+function performUndo(): void {
+  // Need at least 2 entries: the baseline and the post-edit state we want
+  // to roll back from. Snapshot now if a burst is mid-flight so we can
+  // pop off a meaningful step.
+  if (undoStack.length === 0) return;
+  const currentValue = getEditorValue();
+  const top = undoStack[undoStack.length - 1];
+  if (top.value !== currentValue) {
+    // Pending burst not yet snapshotted — capture it so the user can
+    // get back here via redo.
+    const caret = getCaretOffset();
+    undoStack.push({ value: currentValue, caretStart: caret.start, caretEnd: caret.end });
+  }
+  if (undoStack.length < 2) return;
+  const popped = undoStack.pop()!;
+  redoStack.push(popped);
+  const target = undoStack[undoStack.length - 1];
+  restoreSnapshot(target);
+  lastSnapshotTime = Date.now();
+}
+
+function performRedo(): void {
+  const next = redoStack.pop();
+  if (!next) return;
+  undoStack.push(next);
+  restoreSnapshot(next);
+  lastSnapshotTime = Date.now();
+}
+
+function restoreSnapshot(snap: UndoSnapshot): void {
+  setEditorValue(snap.value);
+  applyEditorHighlighting();
+  setCaretOffset(snap.caretStart, snap.caretEnd);
+  updateCounts(snap.value);
+  // Bring caret into view in case it ended up off-screen.
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const editorRect = noteContentInput.getBoundingClientRect();
+    if (rect.top < editorRect.top || rect.bottom > editorRect.bottom) {
+      const offset = rect.top - editorRect.top - editorRect.height / 2;
+      noteContentInput.scrollTop += offset;
+    }
+  }
+}
 
 function updateCounts(text: string): void {
   charCount.textContent = `${text.length} chars`;
@@ -67,7 +276,6 @@ const findPrevBtn = document.getElementById('find-prev') as HTMLButtonElement;
 const findNextBtn = document.getElementById('find-next') as HTMLButtonElement;
 const findCloseBtn = document.getElementById('find-close') as HTMLButtonElement;
 const findBtn = document.getElementById('btn-find') as HTMLButtonElement;
-const findOverlay = document.getElementById('find-highlight-overlay') as HTMLDivElement;
 
 // Window Controls
 document.getElementById('btn-minimize')?.addEventListener('click', () => window.electronAPI.minimize());
@@ -95,6 +303,8 @@ previewBtn?.addEventListener('click', () => togglePreview());
 // Auto-create note as soon as the user starts typing a title
 noteTitleInput.addEventListener('input', () => {
   if (noteTitleInput.value) void ensureActiveNote();
+  // Title may toggle .py extension → re-evaluate Python mode.
+  applyEditorHighlighting();
 });
 
 // Auto-save title on Enter or blur
@@ -109,14 +319,6 @@ noteTitleInput.addEventListener('blur', () => saveTitle());
 
 // Persist content on blur so nothing is lost when focus leaves the editor
 noteContentInput.addEventListener('blur', () => persistCurrentNote());
-
-// Keep the find highlight overlay scrolled in sync with the textarea.
-// Without this, the textarea scrolls but the (visible) overlay stays put —
-// so while search is active the scroll appears frozen.
-noteContentInput.addEventListener('scroll', () => {
-  findOverlay.scrollTop = noteContentInput.scrollTop;
-  findOverlay.scrollLeft = noteContentInput.scrollLeft;
-});
 
 // Find bar toggle
 findBtn?.addEventListener('click', () => showFindBar());
@@ -138,8 +340,12 @@ findNextBtn?.addEventListener('click', () => navigateFind(1));
 
 // Character count + auto-create note on first keystroke
 noteContentInput.addEventListener('input', () => {
-  updateCounts(noteContentInput.value);
-  if (noteContentInput.value) void ensureActiveNote();
+  const value = getEditorValue();
+  updateCounts(value);
+  if (value) void ensureActiveNote();
+  // Re-tokenize Python files in place. Caret offset is preserved across
+  // the innerHTML replacement.
+  applyEditorHighlighting();
   // Re-run find if find bar is open
   if (findBar.style.display === 'flex') performFind();
 });
@@ -148,43 +354,52 @@ noteContentInput.addEventListener('scroll', () => {
   lineNumbersEl.scrollTop = noteContentInput.scrollTop;
 });
 
-// On window resize, the textarea can fail to repaint its rendered text and
-// leave visible artifacts until something forces a redraw — which is why
-// scrolling makes the issue go away. Nudge scrollTop on every resize event
-// to mimic that fix automatically.
-window.addEventListener('resize', () => {
-  const top = noteContentInput.scrollTop;
-  const left = noteContentInput.scrollLeft;
-  noteContentInput.scrollTop = top + 1;
-  noteContentInput.scrollTop = top;
-  noteContentInput.scrollLeft = left + 1;
-  noteContentInput.scrollLeft = left;
+// Snapshot the pre-edit state on every input — coalesced by time, so a
+// burst of typing produces one undo step, not one per character.
+noteContentInput.addEventListener('beforeinput', () => {
+  maybeSnapshotForBurst();
 });
 
-// Tab key inserts 2 spaces instead of changing focus
+// Editor-scoped Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z. We have to handle these
+// ourselves because applyEditorHighlighting() rewrites innerHTML, which
+// trashes the browser's native undo history.
 noteContentInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Tab') {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (!ctrl) return;
+  if (e.key === 'z' && !e.shiftKey) {
     e.preventDefault();
-    const start = noteContentInput.selectionStart;
-    const end = noteContentInput.selectionEnd;
-    const value = noteContentInput.value;
-
-    // If there's a selection spanning multiple lines, indent each line
-    const selected = value.substring(start, end);
-    if (selected.includes('\n')) {
-      const indented = selected.replace(/^/gm, '  ');
-      noteContentInput.value = value.substring(0, start) + indented + value.substring(end);
-      noteContentInput.selectionStart = start;
-      noteContentInput.selectionEnd = start + indented.length;
-    } else {
-      // Simple case: insert 2 spaces at cursor
-      noteContentInput.value = value.substring(0, start) + '  ' + value.substring(end);
-      noteContentInput.selectionStart = noteContentInput.selectionEnd = start + 2;
-    }
-
-    // Trigger input event so char count and find update
-    noteContentInput.dispatchEvent(new Event('input'));
+    performUndo();
+  } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
+    e.preventDefault();
+    performRedo();
   }
+});
+
+// Tab key inserts 2 spaces instead of changing focus.
+noteContentInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  e.preventDefault();
+  // Tab is a structural edit — record state before mutating.
+  snapshotEditorState();
+  const value = getEditorValue();
+  const { start, end } = getCaretOffset();
+
+  if (start !== end && value.substring(start, end).includes('\n')) {
+    // Multi-line selection: indent every line in the range.
+    const selected = value.substring(start, end);
+    const indented = selected.replace(/^/gm, '  ');
+    setEditorValue(value.substring(0, start) + indented + value.substring(end));
+    applyEditorHighlighting();
+    setCaretOffset(start, start + indented.length);
+  } else {
+    // Single position (or single-line selection): just insert two spaces.
+    setEditorValue(value.substring(0, start) + '  ' + value.substring(end));
+    applyEditorHighlighting();
+    setCaretOffset(start + 2);
+  }
+
+  // Trigger input handlers (char count, find re-run).
+  noteContentInput.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // Search (filter notes in sidebar)
@@ -332,8 +547,11 @@ async function selectNote(id: string): Promise<void> {
   const note = await window.electronAPI.getNote(id);
   if (note) {
     noteTitleInput.value = note.title;
-    noteContentInput.value = note.content;
+    setEditorValue(note.content);
     updateCounts(note.content);
+    applyEditorHighlighting();
+    // Reset undo history to this note's loaded content as the baseline.
+    resetUndoTo(note.content);
     renderNotesList(searchInput.value.toLowerCase());
     setStatus(`> Viewing: ${note.title}`);
     hideFindBar();
@@ -389,7 +607,7 @@ async function saveTitle(): Promise<void> {
   const currentNote = notes.find(n => n.id === activeNoteId);
   if (!currentNote || currentNote.title === newTitle) return;
 
-  const updated = await window.electronAPI.editNote(activeNoteId, newTitle, noteContentInput.value);
+  const updated = await window.electronAPI.editNote(activeNoteId, newTitle, getEditorValue());
   if (updated) {
     await loadNotes();
     setStatus('> Title saved.');
@@ -401,7 +619,7 @@ async function saveTitle(): Promise<void> {
  */
 async function persistCurrentNote(): Promise<void> {
   const newTitle = noteTitleInput.value.trim();
-  const newContent = noteContentInput.value;
+  const newContent = getEditorValue();
 
   if (!activeNoteId) {
     if (!newTitle && !newContent) return;
@@ -438,6 +656,7 @@ async function applySaveResult(filePath: string, content: string): Promise<void>
   noteTitleInput.value = filePath;
   notes = await window.electronAPI.listNotes();
   renderNotesList(searchInput.value.toLowerCase());
+  applyEditorHighlighting();
 }
 
 /**
@@ -445,7 +664,7 @@ async function applySaveResult(filePath: string, content: string): Promise<void>
  */
 async function saveCurrentNote(): Promise<void> {
   await saveTitle();
-  const content = noteContentInput.value;
+  const content = getEditorValue();
   const currentNote = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
   const existingPath = currentNote?.filePath;
 
@@ -475,7 +694,7 @@ async function saveCurrentNote(): Promise<void> {
  */
 async function saveAsCurrentNote(): Promise<void> {
   await saveTitle();
-  const content = noteContentInput.value;
+  const content = getEditorValue();
   const currentNote = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
   const existingPath = currentNote?.filePath;
 
@@ -526,25 +745,45 @@ async function openFileFlow(): Promise<void> {
       setStatus(`> Error opening: ${result.error}`);
       return;
     }
-
-    const existing = await window.electronAPI.findNoteByFilePath(result.filePath);
-    if (existing) {
-      notes = await window.electronAPI.listNotes();
-      await selectNote(existing.id);
-      setStatus(`> Opened existing note for ${result.filePath}`);
-      return;
-    }
-
-    const created = await window.electronAPI.createNote(result.filePath, result.content);
-    await window.electronAPI.setNoteFilePath(created.id, result.filePath);
-    notes = await window.electronAPI.listNotes();
-    await selectNote(created.id);
-    setStatus(`> Loaded ${result.filePath}`);
+    await loadFileIntoEditor(result.filePath, result.content);
   } catch (err) {
     console.error('Open error:', err);
     setStatus(`> Error opening: ${String(err)}`);
   }
 }
+
+/**
+ * Adopt a file (path + content) as the active note — reuse an existing one if it
+ * tracks the same path, otherwise create a fresh note bound to the path.
+ */
+async function loadFileIntoEditor(filePath: string, content: string): Promise<void> {
+  const existing = await window.electronAPI.findNoteByFilePath(filePath);
+  if (existing) {
+    notes = await window.electronAPI.listNotes();
+    await selectNote(existing.id);
+    setStatus(`> Opened existing note for ${filePath}`);
+    return;
+  }
+
+  const created = await window.electronAPI.createNote(filePath, content);
+  await window.electronAPI.setNoteFilePath(created.id, filePath);
+  notes = await window.electronAPI.listNotes();
+  await selectNote(created.id);
+  setStatus(`> Loaded ${filePath}`);
+}
+
+window.electronAPI.onOpenExternalFile(async (payload) => {
+  if ('error' in payload) {
+    setStatus(`> Error opening ${payload.filePath}: ${payload.error}`);
+    return;
+  }
+  try {
+    await loadFileIntoEditor(payload.filePath, payload.content);
+  } catch (err) {
+    console.error('External open error:', err);
+    setStatus(`> Error opening: ${String(err)}`);
+  }
+});
 
 /**
  * Delete current note
@@ -577,8 +816,10 @@ async function deleteCurrentNote(): Promise<void> {
   } else {
     activeNoteId = null;
     noteTitleInput.value = '';
-    noteContentInput.value = '';
+    setEditorValue('');
     updateCounts('');
+    applyEditorHighlighting();
+    resetUndoTo('');
     renderNotesList(searchInput.value.toLowerCase());
     noteTitleInput.focus();
     setStatus('> Note deleted. No notes in the Matrix.');
@@ -591,7 +832,7 @@ async function deleteCurrentNote(): Promise<void> {
 
 function togglePreview(): void {
   if (!isPreviewMode) {
-    if (!activeNoteId && !noteContentInput.value) {
+    if (!activeNoteId && !getEditorValue()) {
       setStatus('> Open or write a note first.');
       return;
     }
@@ -605,8 +846,6 @@ function togglePreview(): void {
     lineNumbersEl.style.display = 'none';
     setStatus('> Preview mode.');
 
-    findOverlay.innerHTML = '';
-    noteContentInput.classList.remove('searching');
     if (findBar.style.display === 'flex') {
       performFind();
       findInput.focus();
@@ -621,6 +860,7 @@ function togglePreview(): void {
     lineNumbersEl.style.display = '';
     setStatus('> Edit mode.');
 
+    applyEditorHighlighting();
     if (findBar.style.display === 'flex') {
       performFind();
       findInput.focus();
@@ -633,12 +873,23 @@ function togglePreview(): void {
 let mermaidRenderCounter = 0;
 
 function renderPreview(): void {
-  const raw = noteContentInput.value || '';
+  const raw = getEditorValue();
   const html = window.marked.parse(raw);
   notePreviewEl.innerHTML = window.DOMPurify.sanitize(html, {
     ADD_ATTR: ['target'],
   });
+  highlightPythonBlocks();
   void renderMermaidBlocks();
+}
+
+function highlightPythonBlocks(): void {
+  const blocks = notePreviewEl.querySelectorAll<HTMLElement>(
+    'pre > code.language-python, pre > code.language-py'
+  );
+  for (const code of Array.from(blocks)) {
+    const source = code.textContent || '';
+    code.innerHTML = tokenizePython(source);
+  }
 }
 
 async function renderMermaidBlocks(): Promise<void> {
@@ -673,6 +924,11 @@ async function renderMermaidBlocks(): Promise<void> {
 // FIND IN CONTENT
 // ============================================
 
+// Find marks live INSIDE the contenteditable now (or inside the markdown
+// preview, depending on mode). We track them as DOM elements so navigation
+// can toggle the active class and scroll without re-running the search.
+let findMarkElements: HTMLElement[] = [];
+
 function showFindBar(): void {
   if (!activeNoteId) {
     setStatus('> Open a note first.');
@@ -681,15 +937,7 @@ function showFindBar(): void {
   findBar.style.display = 'flex';
   findInput.focus();
 
-  let selection = '';
-  if (isPreviewMode) {
-    selection = window.getSelection()?.toString() || '';
-  } else {
-    selection = noteContentInput.value.substring(
-      noteContentInput.selectionStart || 0,
-      noteContentInput.selectionEnd || 0
-    );
-  }
+  const selection = window.getSelection()?.toString() || '';
   if (selection) {
     findInput.value = selection;
   }
@@ -700,212 +948,130 @@ function hideFindBar(): void {
   findBar.style.display = 'none';
   findInput.value = '';
   findMatchCount.textContent = '0 matches';
-  findMatches = [];
-  findPreviewMatches = [];
+  findMarkElements = [];
   activeMatchIndex = -1;
-  findOverlay.innerHTML = '';
-  noteContentInput.classList.remove('searching');
   if (isPreviewMode) {
     renderPreview();
   } else {
+    // Re-applying highlighting also wipes any <mark> nodes we inserted.
+    applyEditorHighlighting();
     noteContentInput.focus();
   }
 }
 
 function performFind(): void {
-  findMatches = [];
-  findPreviewMatches = [];
+  findMarkElements = [];
   activeMatchIndex = -1;
 
   const query = findInput.value;
   if (!query) {
     findMatchCount.textContent = '0 matches';
-    if (isPreviewMode) {
-      renderPreview();
-    } else {
-      findOverlay.innerHTML = '';
-      noteContentInput.classList.remove('searching');
-    }
+    if (isPreviewMode) renderPreview();
+    else applyEditorHighlighting();
     return;
   }
 
+  // Wipe any previous marks before re-searching.
   if (isPreviewMode) {
-    performFindInPreview(query);
-    return;
+    renderPreview();
+    findMarkElements = wrapMatchesInElement(notePreviewEl, query, findCase.checked);
+  } else {
+    applyEditorHighlighting();
+    findMarkElements = wrapMatchesInElement(noteContentInput, query, findCase.checked);
   }
 
-  const content = noteContentInput.value;
-  const caseSensitive = findCase.checked;
-  const searchContent = caseSensitive ? content : content.toLowerCase();
-  const searchQuery = caseSensitive ? query : query.toLowerCase();
+  const count = findMarkElements.length;
+  findMatchCount.textContent = count === 0 ? '0 matches' : `1/${count}`;
 
-  let idx = searchContent.indexOf(searchQuery);
-  while (idx !== -1) {
-    findMatches.push({ start: idx, end: idx + query.length });
-    idx = searchContent.indexOf(searchQuery, idx + 1);
-  }
-
-  findMatchCount.textContent = `${findMatches.length} match${findMatches.length !== 1 ? 'es' : ''}`;
-
-  renderFindHighlights();
-
-  if (findMatches.length > 0) {
+  if (count > 0) {
     activeMatchIndex = 0;
-    findMatchCount.textContent = `1/${findMatches.length}`;
-    const match = findMatches[0];
-    noteContentInput.setSelectionRange(match.start, match.end);
-    scrollToActiveMatch();
+    setActiveMark(0);
   }
 }
 
-function performFindInPreview(query: string): void {
-  renderPreview();
+/**
+ * Walk all text nodes under `root` and wrap every occurrence of `query`
+ * (case-insensitive unless `caseSensitive`) in a <mark class="find-mark">.
+ * Splits text nodes around matches so syntax-token spans stay intact.
+ */
+function wrapMatchesInElement(root: HTMLElement, query: string, caseSensitive: boolean): HTMLElement[] {
+  const marks: HTMLElement[] = [];
+  if (!query) return marks;
 
-  const caseSensitive = findCase.checked;
-  const searchQuery = caseSensitive ? query : query.toLowerCase();
-
-  const walker = document.createTreeWalker(notePreviewEl, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
   let current: Node | null;
   while ((current = walker.nextNode())) {
+    // Skip text nodes that are already inside a find-mark to avoid
+    // re-wrapping (defensive; we only call this on a fresh tree).
+    const parent = current.parentElement;
+    if (parent?.classList.contains('find-mark')) continue;
     textNodes.push(current as Text);
   }
 
-  for (const textNode of textNodes) {
-    const text = textNode.nodeValue || '';
-    if (!text) continue;
-    const searchText = caseSensitive ? text : text.toLowerCase();
+  const lowerQuery = caseSensitive ? query : query.toLowerCase();
 
-    let idx = searchText.indexOf(searchQuery);
+  for (const node of textNodes) {
+    const text = node.nodeValue || '';
+    if (!text) continue;
+    const haystack = caseSensitive ? text : text.toLowerCase();
+    let idx = haystack.indexOf(lowerQuery);
     if (idx === -1) continue;
 
-    const parent = textNode.parentNode;
+    const parent = node.parentNode;
     if (!parent) continue;
 
     const fragment = document.createDocumentFragment();
-    let lastIdx = 0;
-
+    let last = 0;
     while (idx !== -1) {
-      if (idx > lastIdx) {
-        fragment.appendChild(document.createTextNode(text.substring(lastIdx, idx)));
+      if (idx > last) {
+        fragment.appendChild(document.createTextNode(text.substring(last, idx)));
       }
       const mark = document.createElement('mark');
-      mark.className = 'find-preview-mark';
+      mark.className = 'find-mark';
       mark.textContent = text.substring(idx, idx + query.length);
       fragment.appendChild(mark);
-      findPreviewMatches.push(mark);
-      lastIdx = idx + query.length;
-      idx = searchText.indexOf(searchQuery, lastIdx);
+      marks.push(mark);
+      last = idx + query.length;
+      idx = haystack.indexOf(lowerQuery, last);
     }
-
-    if (lastIdx < text.length) {
-      fragment.appendChild(document.createTextNode(text.substring(lastIdx)));
+    if (last < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(last)));
     }
-
-    parent.replaceChild(fragment, textNode);
+    parent.replaceChild(fragment, node);
   }
-
-  findMatchCount.textContent = `${findPreviewMatches.length} match${findPreviewMatches.length !== 1 ? 'es' : ''}`;
-
-  if (findPreviewMatches.length > 0) {
-    activeMatchIndex = 0;
-    findMatchCount.textContent = `1/${findPreviewMatches.length}`;
-    findPreviewMatches[0].classList.add('find-preview-mark-active');
-    findPreviewMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-}
-
-function renderFindHighlights(): void {
-  const query = findInput.value;
-  if (!query) {
-    findOverlay.innerHTML = '';
-    noteContentInput.classList.remove('searching');
-    return;
-  }
-
-  const content = noteContentInput.value;
-  if (!content) {
-    findOverlay.innerHTML = '';
-    noteContentInput.classList.remove('searching');
-    return;
-  }
-
-  const caseSensitive = findCase.checked;
-  const searchContent = caseSensitive ? content : content.toLowerCase();
-  const searchQuery = caseSensitive ? query : query.toLowerCase();
-
-  let result = '';
-  let pos = 0;
-  let matchIdx = searchContent.indexOf(searchQuery, pos);
-  let hasMatch = false;
-
-  while (matchIdx !== -1) {
-    hasMatch = true;
-    if (matchIdx > pos) {
-      result += escapeHtml(content.substring(pos, matchIdx));
-    }
-    result += '<mark>' + escapeHtml(content.substring(matchIdx, matchIdx + query.length)) + '</mark>';
-    pos = matchIdx + query.length;
-    matchIdx = searchContent.indexOf(searchQuery, pos);
-  }
-
-  if (!hasMatch) {
-    findOverlay.innerHTML = escapeHtml(content);
-    noteContentInput.classList.remove('searching');
-    return;
-  }
-
-  if (pos < content.length) {
-    result += escapeHtml(content.substring(pos));
-  }
-
-  findOverlay.innerHTML = result;
-  noteContentInput.classList.add('searching');
-  findOverlay.scrollTop = noteContentInput.scrollTop;
-  findOverlay.scrollLeft = noteContentInput.scrollLeft;
+  return marks;
 }
 
 function navigateFind(direction: number): void {
-  const count = isPreviewMode ? findPreviewMatches.length : findMatches.length;
+  const count = findMarkElements.length;
   if (count === 0) return;
 
   activeMatchIndex += direction;
   if (activeMatchIndex < 0) activeMatchIndex = count - 1;
   if (activeMatchIndex >= count) activeMatchIndex = 0;
 
-  if (isPreviewMode) {
-    findPreviewMatches.forEach((m, i) => {
-      m.classList.toggle('find-preview-mark-active', i === activeMatchIndex);
-    });
-    findPreviewMatches[activeMatchIndex].scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-    });
-  } else {
-    const match = findMatches[activeMatchIndex];
-    noteContentInput.setSelectionRange(match.start, match.end);
-    noteContentInput.focus();
-    scrollToActiveMatch();
-  }
-
+  setActiveMark(activeMatchIndex);
   findMatchCount.textContent = `${activeMatchIndex + 1}/${count}`;
 }
 
-// Textareas don't auto-scroll to setSelectionRange. Use the <mark> the overlay
-// already rendered to compute the match's y-offset and center it in the viewport.
-function scrollToActiveMatch(): void {
-  if (activeMatchIndex < 0) return;
-  const marks = findOverlay.querySelectorAll('mark');
-  const active = marks[activeMatchIndex] as HTMLElement | undefined;
-  if (!active) return;
+function setActiveMark(idx: number): void {
+  findMarkElements.forEach((m, i) => {
+    m.classList.toggle('find-mark-active', i === idx);
+  });
+  const target = findMarkElements[idx];
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  const markRect = active.getBoundingClientRect();
-  const overlayRect = findOverlay.getBoundingClientRect();
-  const markTopWithinOverlay = markRect.top - overlayRect.top + findOverlay.scrollTop;
-  const viewHeight = noteContentInput.clientHeight;
-  const target = markTopWithinOverlay - viewHeight / 2 + markRect.height / 2;
-
-  noteContentInput.scrollTop = Math.max(0, target);
+  // In edit mode also drop the caret onto the match so Esc → keep typing
+  // resumes from the right position.
+  if (!isPreviewMode) {
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
 }
 
 // ============================================
@@ -1039,6 +1205,218 @@ function truncateMiddle(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   const keep = Math.max(1, Math.floor((maxLen - 1) / 2));
   return text.slice(0, keep) + '…' + text.slice(text.length - keep);
+}
+
+// ============================================
+// PYTHON SYNTAX HIGHLIGHTING
+// ============================================
+
+const PY_KEYWORDS = new Set([
+  'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await',
+  'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except',
+  'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is',
+  'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try',
+  'while', 'with', 'yield', 'match', 'case',
+]);
+
+const PY_BUILTINS = new Set([
+  'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'bytearray', 'bytes',
+  'callable', 'chr', 'classmethod', 'compile', 'complex', 'delattr',
+  'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'filter',
+  'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr',
+  'hash', 'help', 'hex', 'id', 'input', 'int', 'isinstance',
+  'issubclass', 'iter', 'len', 'list', 'locals', 'map', 'max',
+  'memoryview', 'min', 'next', 'object', 'oct', 'open', 'ord', 'pow',
+  'print', 'property', 'range', 'repr', 'reversed', 'round', 'set',
+  'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum', 'super',
+  'tuple', 'type', 'vars', 'zip', '__import__',
+  'Exception', 'ValueError', 'TypeError', 'KeyError', 'IndexError',
+  'AttributeError', 'RuntimeError', 'StopIteration', 'FileNotFoundError',
+  'NameError', 'ZeroDivisionError', 'NotImplementedError', 'OSError',
+  'ImportError', 'ModuleNotFoundError', 'AssertionError', 'LookupError',
+]);
+
+/**
+ * Tokenize Python source into HTML with token spans. The output is
+ * inserted into the .code-overlay div which sits behind the (transparent)
+ * textarea, giving the illusion of an editable highlighter.
+ */
+function tokenizePython(source: string): string {
+  let i = 0;
+  const n = source.length;
+  let out = '';
+  let plain = '';
+
+  const flush = () => {
+    if (plain) {
+      out += escapeHtml(plain);
+      plain = '';
+    }
+  };
+  const emit = (cls: string, text: string) => {
+    flush();
+    out += `<span class="tok-${cls}">${escapeHtml(text)}</span>`;
+  };
+
+  // Lookback over already-emitted plain to find the last non-space char
+  const prevNonSpace = (): string => {
+    for (let k = plain.length - 1; k >= 0; k--) {
+      const c = plain[k];
+      if (c !== ' ' && c !== '\t') return c;
+    }
+    return '';
+  };
+
+  const isIdStart = (c: string) => /[A-Za-z_]/.test(c);
+  const isIdCont = (c: string) => /[A-Za-z0-9_]/.test(c);
+
+  while (i < n) {
+    const c = source[i];
+
+    // Comment to end of line
+    if (c === '#') {
+      let j = i;
+      while (j < n && source[j] !== '\n') j++;
+      emit('comment', source.substring(i, j));
+      i = j;
+      continue;
+    }
+
+    // String literals (including triple-quoted, with optional prefix)
+    const sm = source.substring(i).match(/^(?:[rRbBuUfF]{0,2})(?:"""|''')/);
+    if (sm) {
+      const prefixLen = sm[0].length - 3;
+      const quote = sm[0].slice(prefixLen);
+      const start = i;
+      let j = i + sm[0].length;
+      while (j < n && source.substring(j, j + 3) !== quote) j++;
+      j = Math.min(n, j + (source.substring(j, j + 3) === quote ? 3 : 0));
+      emit('string', source.substring(start, j));
+      i = j;
+      continue;
+    }
+    const sm2 = source.substring(i).match(/^([rRbBuUfF]{0,2})(['"])/);
+    if (sm2) {
+      const quote = sm2[2];
+      const start = i;
+      let j = i + sm2[0].length;
+      while (j < n && source[j] !== quote && source[j] !== '\n') {
+        if (source[j] === '\\' && j + 1 < n) j += 2;
+        else j++;
+      }
+      if (j < n && source[j] === quote) j++;
+      emit('string', source.substring(start, j));
+      i = j;
+      continue;
+    }
+
+    // Decorator: @name(.name)*
+    if (c === '@' && i + 1 < n && isIdStart(source[i + 1])) {
+      // Only treat as decorator at start of (possibly indented) line
+      const before = prevNonSpace();
+      if (before === '' || before === '\n') {
+        let j = i + 1;
+        while (j < n && (isIdCont(source[j]) || source[j] === '.')) j++;
+        emit('decorator', source.substring(i, j));
+        i = j;
+        continue;
+      }
+    }
+
+    // Numbers
+    if (/[0-9]/.test(c) || (c === '.' && i + 1 < n && /[0-9]/.test(source[i + 1]))) {
+      const m = source.substring(i).match(
+        /^(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*\.?\d*|\.\d[\d_]*)(?:[eE][+-]?\d+)?[jJ]?)/
+      );
+      if (m) {
+        emit('number', m[0]);
+        i += m[0].length;
+        continue;
+      }
+    }
+
+    // Identifiers / keywords
+    if (isIdStart(c)) {
+      let j = i + 1;
+      while (j < n && isIdCont(source[j])) j++;
+      const word = source.substring(i, j);
+
+      if (PY_KEYWORDS.has(word)) {
+        emit('keyword', word);
+      } else if (word === 'self' || word === 'cls') {
+        emit('self', word);
+      } else if (PY_BUILTINS.has(word)) {
+        emit('builtin', word);
+      } else {
+        // Function call: identifier followed by '(' (skipping spaces)
+        let k = j;
+        while (k < n && (source[k] === ' ' || source[k] === '\t')) k++;
+        if (k < n && source[k] === '(') {
+          emit('function', word);
+        } else if (/^[A-Z]/.test(word) && word.length > 1) {
+          emit('class', word);
+        } else {
+          plain += word;
+        }
+      }
+      i = j;
+      continue;
+    }
+
+    plain += c;
+    i++;
+  }
+
+  flush();
+  return out;
+}
+
+const PY_CONTENT_RE = /(?:^|\n)\s*(?:def\s+\w+\s*\(|class\s+\w+\b|from\s+[\w.]+\s+import\b|import\s+[\w.]+|@\w+|if\s+__name__\s*==)/m;
+const PY_SHEBANG_RE = /^#!.*\bpython/i;
+
+function looksLikePython(content: string): boolean {
+  if (!content) return false;
+  if (PY_SHEBANG_RE.test(content)) return true;
+  return PY_CONTENT_RE.test(content);
+}
+
+function isPythonFile(): boolean {
+  const note = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
+  const path = (note?.filePath || '').toLowerCase();
+  const title = noteTitleInput.value.trim().toLowerCase();
+  if (path.endsWith('.py') || title.endsWith('.py')) return true;
+  return looksLikePython(getEditorValue());
+}
+
+/**
+ * Apply (or clear) syntax highlighting in-place inside the contenteditable.
+ * Caret position is preserved across the innerHTML rewrite by saving and
+ * restoring its character offset. Skipped in preview mode and while the
+ * find bar is open (find owns the inline marks during search).
+ */
+function applyEditorHighlighting(): void {
+  if (isPreviewMode) return;
+
+  const isPython = isPythonFile();
+  noteContentInput.classList.toggle('python-mode', isPython);
+
+  const value = getEditorValue();
+  const wasFocused = document.activeElement === noteContentInput;
+  const caret = wasFocused ? getCaretOffset() : null;
+
+  if (isPython) {
+    setEditorHTML(tokenizePython(value));
+  } else {
+    // Plain mode: only re-set textContent when there's HTML cruft to
+    // clear (e.g., leftover token spans after switching out of Python).
+    // Replacing it unconditionally would wipe the caret and the browser's
+    // composition state for no benefit.
+    if (noteContentInput.querySelector('span, mark')) {
+      setEditorValue(value);
+    }
+  }
+
+  if (caret) setCaretOffset(caret.start, caret.end);
 }
 
 // Initialize
