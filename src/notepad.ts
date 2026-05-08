@@ -1,8 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-
-const NOTES_DIR = path.join(process.cwd(), 'notes');
-const DATA_FILE = path.join(NOTES_DIR, 'index.json');
+import { app } from 'electron';
 
 export interface Note {
   id: string;
@@ -13,19 +11,40 @@ export interface Note {
   filePath?: string;
 }
 
+function getNotesDir(): string {
+  return path.join(app.getPath('userData'), 'notes');
+}
+
+function getDataFile(): string {
+  return path.join(getNotesDir(), 'index.json');
+}
+
 async function initNotes(): Promise<void> {
+  const notesDir = getNotesDir();
+  const dataFile = getDataFile();
   try {
-    await fs.access(NOTES_DIR);
-  } catch {
-    await fs.mkdir(NOTES_DIR, { recursive: true });
-    await fs.writeFile(DATA_FILE, JSON.stringify([]));
-  }
+    await fs.access(dataFile);
+    return;
+  } catch {}
+
+  await fs.mkdir(notesDir, { recursive: true });
+
+  // One-shot migration from the legacy cwd-relative location used in older builds
+  const legacyFile = path.join(process.cwd(), 'notes', 'index.json');
+  try {
+    const legacy = await fs.readFile(legacyFile, 'utf-8');
+    JSON.parse(legacy); // validate
+    await fs.writeFile(dataFile, legacy);
+    return;
+  } catch {}
+
+  await fs.writeFile(dataFile, JSON.stringify([]));
 }
 
 export async function loadNotes(): Promise<Note[]> {
   await initNotes();
   try {
-    const data = await fs.readFile(DATA_FILE, 'utf-8');
+    const data = await fs.readFile(getDataFile(), 'utf-8');
     return JSON.parse(data) as Note[];
   } catch {
     return [];
@@ -33,7 +52,7 @@ export async function loadNotes(): Promise<Note[]> {
 }
 
 async function saveNotes(notes: Note[]): Promise<void> {
-  await fs.writeFile(DATA_FILE, JSON.stringify(notes, null, 2));
+  await fs.writeFile(getDataFile(), JSON.stringify(notes, null, 2));
 }
 
 export async function createNote(title: string, content: string): Promise<Note> {

@@ -148,6 +148,19 @@ noteContentInput.addEventListener('scroll', () => {
   lineNumbersEl.scrollTop = noteContentInput.scrollTop;
 });
 
+// On window resize, the textarea can fail to repaint its rendered text and
+// leave visible artifacts until something forces a redraw — which is why
+// scrolling makes the issue go away. Nudge scrollTop on every resize event
+// to mimic that fix automatically.
+window.addEventListener('resize', () => {
+  const top = noteContentInput.scrollTop;
+  const left = noteContentInput.scrollLeft;
+  noteContentInput.scrollTop = top + 1;
+  noteContentInput.scrollTop = top;
+  noteContentInput.scrollLeft = left + 1;
+  noteContentInput.scrollLeft = left;
+});
+
 // Tab key inserts 2 spaces instead of changing focus
 noteContentInput.addEventListener('keydown', (e) => {
   if (e.key === 'Tab') {
