@@ -167,7 +167,17 @@ function snapshotEditorState(): void {
   // "stale, snapshot now" branch of maybeSnapshotForBurst.
   lastSnapshotTime = Date.now();
   const top = undoStack[undoStack.length - 1];
-  if (top && top.value === value) return;
+  if (top && top.value === value) {
+    // Same content — refresh the snapshot's caret so undo restores the
+    // user's *current* position rather than wherever it was when this
+    // snapshot was first taken. Critical for the baseline snapshot
+    // captured at note load (caret defaults to 0): without this, an
+    // undo from an edit deep in the file would yank the caret to the
+    // top of the file.
+    top.caretStart = caret.start;
+    top.caretEnd = caret.end;
+    return;
+  }
   undoStack.push({ value, caretStart: caret.start, caretEnd: caret.end });
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
   redoStack.length = 0;
