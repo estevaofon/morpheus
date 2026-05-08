@@ -527,6 +527,20 @@ button {
 .tok-class     { color: #5eead4; }
 .tok-operator  { color: #a1a1aa; }
 
+/* Markdown token palette (Morpheus default) */
+.tok-md-heading    { color: #38bdf8; font-weight: 700; }
+.tok-md-bold       { color: #e4e4e7; font-weight: 700; }
+.tok-md-italic     { color: #e4e4e7; font-style: italic; }
+.tok-md-strike     { color: #71717a; text-decoration: line-through; }
+.tok-md-code       { color: #fbbf24; }
+.tok-md-codeblock  { color: #fbbf24; }
+.tok-md-link       { color: #5eead4; text-decoration: underline; }
+.tok-md-image      { color: #f472b6; }
+.tok-md-list       { color: #c084fc; font-weight: 600; }
+.tok-md-blockquote { color: #93c5fd; font-style: italic; }
+.tok-md-hr         { color: #a1a1aa; }
+.tok-md-html       { color: #c084fc; }
+
 /* ============================================
    MARKDOWN PREVIEW
    ============================================ */
@@ -1267,3 +1281,17 @@ body.theme-vscode .tok-decorator { color: #dcdcaa; }
 body.theme-vscode .tok-function  { color: #dcdcaa; }
 body.theme-vscode .tok-class     { color: #4ec9b0; }
 body.theme-vscode .tok-operator  { color: #d4d4d4; }
+
+/* VS Code Dark+ markdown palette */
+body.theme-vscode .tok-md-heading    { color: #569cd6; font-weight: 700; }
+body.theme-vscode .tok-md-bold       { color: #d4d4d4; font-weight: 700; }
+body.theme-vscode .tok-md-italic     { color: #d4d4d4; font-style: italic; }
+body.theme-vscode .tok-md-strike     { color: #6a6a6a; text-decoration: line-through; }
+body.theme-vscode .tok-md-code       { color: #ce9178; }
+body.theme-vscode .tok-md-codeblock  { color: #ce9178; }
+body.theme-vscode .tok-md-link       { color: #3794ff; text-decoration: underline; }
+body.theme-vscode .tok-md-image      { color: #4ec9b0; }
+body.theme-vscode .tok-md-list       { color: #6796e6; font-weight: 600; }
+body.theme-vscode .tok-md-blockquote { color: #608b4e; font-style: italic; }
+body.theme-vscode .tok-md-hr         { color: #858585; }
+body.theme-vscode .tok-md-html       { color: #808080; }

@@ -1398,6 +1398,202 @@ function isPythonFile(): boolean {
   return looksLikePython(getEditorValue());
 }
 
+function isMarkdownFile(): boolean {
+  const note = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
+  const path = (note?.filePath || '').toLowerCase();
+  const title = noteTitleInput.value.trim().toLowerCase();
+  return path.endsWith('.md') || path.endsWith('.markdown')
+      || title.endsWith('.md') || title.endsWith('.markdown');
+}
+
+// ============================================
+// MARKDOWN SYNTAX HIGHLIGHTING
+// ============================================
+// Same architecture as tokenizePython: single left-to-right scan with
+// patterns tried in priority order. Multi-line constructs (fenced code
+// blocks) are stateful — they consume until their closing fence (or EOF
+// if unterminated, so partially-typed blocks still highlight).
+
+function tokenizeMarkdown(source: string): string {
+  let i = 0;
+  const n = source.length;
+  let out = '';
+  let plain = '';
+  // True at start of file or right after a '\n'. Some markdown constructs
+  // (headings, lists, blockquotes, HRs) are only valid at line start.
+  let atLineStart = true;
+
+  const flush = () => {
+    if (plain) {
+      out += escapeHtml(plain);
+      plain = '';
+    }
+  };
+  const emit = (cls: string, text: string) => {
+    flush();
+    out += `<span class="tok-md-${cls}">${escapeHtml(text)}</span>`;
+  };
+  const tryMatch = (re: RegExp): RegExpMatchArray | null => source.substring(i).match(re);
+
+  while (i < n) {
+    const c = source[i];
+
+    // Fenced code block: ```lang ... ```
+    if (atLineStart && source.substring(i, i + 3) === '```') {
+      let j = i + 3;
+      while (j < n && source[j] !== '\n') j++;
+      if (j < n) j++;
+      let close = -1;
+      let lineStart = j;
+      let k = j;
+      while (k < n) {
+        if (source[k] === '\n') {
+          lineStart = k + 1;
+          k++;
+          if (source.substring(lineStart, lineStart + 3) === '```') {
+            close = lineStart + 3;
+            while (close < n && source[close] !== '\n') close++;
+            break;
+          }
+        } else {
+          k++;
+        }
+      }
+      const end = close === -1 ? n : close;
+      emit('codeblock', source.substring(i, end));
+      i = end;
+      atLineStart = i > 0 && source[i - 1] === '\n';
+      continue;
+    }
+
+    if (atLineStart) {
+      // Heading: optional 0-3 spaces, 1-6 '#', whitespace, content to EOL.
+      // We swallow the whole heading line as one span.
+      const heading = tryMatch(/^[ ]{0,3}#{1,6}[ \t]+[^\n]*/);
+      if (heading) {
+        emit('heading', heading[0]);
+        i += heading[0].length;
+        atLineStart = false;
+        continue;
+      }
+
+      // Horizontal rule: 3+ of -, *, or _ (matching), optional spaces.
+      const hr = tryMatch(/^[ ]{0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*(?=\n|$)/);
+      if (hr) {
+        emit('hr', hr[0]);
+        i += hr[0].length;
+        continue;
+      }
+
+      // Blockquote marker: '> ' (the rest of the line gets inline tokens).
+      const bq = tryMatch(/^[ ]{0,3}>[ \t]?/);
+      if (bq) {
+        emit('blockquote', bq[0]);
+        i += bq[0].length;
+        atLineStart = false;
+        continue;
+      }
+
+      // List marker: bullet (-, *, +) or numbered. Color only the marker.
+      const list = tryMatch(/^[ \t]*([-*+]|\d+\.)[ \t]+/);
+      if (list) {
+        emit('list', list[0]);
+        i += list[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Inline code: `code`
+    if (c === '`') {
+      const code = tryMatch(/^`[^`\n]+`/);
+      if (code) {
+        emit('code', code[0]);
+        i += code[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Bold: **text** or __text__ (try before italic so ** doesn't match as *)
+    if ((c === '*' && source[i + 1] === '*') || (c === '_' && source[i + 1] === '_')) {
+      const bold = c === '*' ? tryMatch(/^\*\*[^\n]+?\*\*/) : tryMatch(/^__[^\n]+?__/);
+      if (bold) {
+        emit('bold', bold[0]);
+        i += bold[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Italic: *text* or _text_
+    if (c === '*' || c === '_') {
+      const ital = c === '*' ? tryMatch(/^\*[^*\n]+?\*/) : tryMatch(/^_[^_\n]+?_/);
+      if (ital) {
+        emit('italic', ital[0]);
+        i += ital[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Strikethrough: ~~text~~
+    if (c === '~' && source[i + 1] === '~') {
+      const s = tryMatch(/^~~[^\n]+?~~/);
+      if (s) {
+        emit('strike', s[0]);
+        i += s[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Image: ![alt](url)
+    if (c === '!' && source[i + 1] === '[') {
+      const img = tryMatch(/^!\[[^\]\n]*\]\([^)\n]*\)/);
+      if (img) {
+        emit('image', img[0]);
+        i += img[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // Link: [text](url)
+    if (c === '[') {
+      const link = tryMatch(/^\[[^\]\n]*\]\([^)\n]*\)/);
+      if (link) {
+        emit('link', link[0]);
+        i += link[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    // HTML tag: <tag ...> or </tag>
+    if (c === '<') {
+      const html = tryMatch(/^<\/?[a-zA-Z][^>\n]*>/);
+      if (html) {
+        emit('html', html[0]);
+        i += html[0].length;
+        atLineStart = false;
+        continue;
+      }
+    }
+
+    plain += c;
+    if (c === '\n') {
+      atLineStart = true;
+    } else if (c !== ' ' && c !== '\t') {
+      atLineStart = false;
+    }
+    i++;
+  }
+
+  flush();
+  return out;
+}
+
 /**
  * Apply (or clear) syntax highlighting in-place inside the contenteditable.
  * Caret position is preserved across the innerHTML rewrite by saving and
@@ -1408,6 +1604,8 @@ function applyEditorHighlighting(): void {
   if (isPreviewMode) return;
 
   const isPython = isPythonFile();
+  const isMarkdown = !isPython && isMarkdownFile();
+  // Only Python turns off soft-wrap; markdown is prose.
   noteContentInput.classList.toggle('python-mode', isPython);
 
   const value = getEditorValue();
@@ -1416,11 +1614,13 @@ function applyEditorHighlighting(): void {
 
   if (isPython) {
     setEditorHTML(tokenizePython(value));
+  } else if (isMarkdown) {
+    setEditorHTML(tokenizeMarkdown(value));
   } else {
     // Plain mode: only re-set textContent when there's HTML cruft to
-    // clear (e.g., leftover token spans after switching out of Python).
-    // Replacing it unconditionally would wipe the caret and the browser's
-    // composition state for no benefit.
+    // clear (e.g., leftover token spans after switching out of a
+    // highlighted file type). Replacing unconditionally would wipe
+    // the caret and the browser's composition state for no benefit.
     if (noteContentInput.querySelector('span, mark')) {
       setEditorValue(value);
     }
