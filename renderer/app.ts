@@ -276,9 +276,12 @@ function renderNotesList(filter: string = ''): void {
 
   if (filtered.length === 0) {
     notesListEl.innerHTML = `
-      <div class="empty-state" style="padding: 40px 20px;">
-        <div class="empty-state-icon">&#9002;</div>
-        <div class="empty-state-text">${filter ? '> No matching notes.' : '> No notes in the Matrix...'}</div>
+      <div class="empty-state">
+        <svg class="empty-state-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <div class="empty-state-text">${filter ? 'No matching notes' : 'No notes yet'}</div>
       </div>
     `;
     return;
@@ -421,12 +424,8 @@ async function persistCurrentNote(): Promise<void> {
  */
 function flashSaveBtn(): void {
   const saveBtn = document.getElementById('btn-save')!;
-  saveBtn.style.color = '#00ff41';
-  saveBtn.style.boxShadow = '0 0 10px #00ff41';
-  setTimeout(() => {
-    saveBtn.style.color = '';
-    saveBtn.style.boxShadow = '';
-  }, 500);
+  saveBtn.classList.add('flash');
+  setTimeout(() => saveBtn.classList.remove('flash'), 500);
 }
 
 /**
@@ -1049,19 +1048,19 @@ window.mermaid.initialize({
   theme: 'base',
   fontFamily: '"JetBrains Mono", monospace',
   themeVariables: {
-    background: '#000000',
-    primaryColor: '#001a00',
-    primaryTextColor: '#00ff41',
-    primaryBorderColor: '#00ff41',
-    lineColor: '#00ff41',
-    secondaryColor: '#003300',
-    tertiaryColor: '#002200',
-    textColor: '#00ff41',
-    mainBkg: '#001a00',
-    nodeBorder: '#00ff41',
-    clusterBkg: '#000d00',
-    clusterBorder: '#00ff41',
-    edgeLabelBackground: '#000000',
+    background: '#18181b',
+    primaryColor: '#27272a',
+    primaryTextColor: '#e4e4e7',
+    primaryBorderColor: '#38bdf8',
+    lineColor: '#7dd3fc',
+    secondaryColor: '#1f1f23',
+    tertiaryColor: '#27272a',
+    textColor: '#e4e4e7',
+    mainBkg: '#27272a',
+    nodeBorder: '#38bdf8',
+    clusterBkg: '#1f1f23',
+    clusterBorder: '#3f3f46',
+    edgeLabelBackground: '#18181b',
   },
 });
 const initialPrefs = loadPreferences();

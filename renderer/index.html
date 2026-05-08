@@ -15,9 +15,15 @@
       <span class="titlebar-text">Morpheus</span>
     </div>
     <div class="titlebar-controls">
-      <button class="titlebar-btn" id="btn-minimize">&#9472;</button>
-      <button class="titlebar-btn" id="btn-maximize">&#9633;</button>
-      <button class="titlebar-btn titlebar-close" id="btn-close">&#10005;</button>
+      <button class="titlebar-btn" id="btn-minimize" title="Minimize" aria-label="Minimize">
+        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="titlebar-btn" id="btn-maximize" title="Maximize" aria-label="Maximize">
+        <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+      </button>
+      <button class="titlebar-btn titlebar-close" id="btn-close" title="Close" aria-label="Close">
+        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
   </div>
 
@@ -26,12 +32,15 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <button class="btn-new" id="btn-new">&#43; New Note</button>
+        <button class="btn-new" id="btn-new">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>New Note</span>
+        </button>
       </div>
       <div class="sidebar-search">
         <div class="search-wrapper">
-          <span class="search-icon">&#128269;</span>
-          <input type="text" id="search-input" placeholder="> Search notes..." class="search-input">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="search-input" placeholder="Search notes..." class="search-input">
         </div>
       </div>
       <div class="notes-list" id="notes-list">
@@ -43,40 +52,59 @@
     <main class="editor-area">
       <!-- Editor Header -->
       <div class="editor-header">
-        <input type="text" id="note-title" class="note-title-input" placeholder="> Note title...">
+        <input type="text" id="note-title" class="note-title-input" placeholder="Note title">
         <div class="editor-toolbar">
-          <button class="toolbar-btn" id="btn-preview" title="Markdown Viewer (Ctrl+Shift+P)">&#128196; Markdown Viewer</button>
-          <button class="toolbar-btn" id="btn-open" title="Open (Ctrl+O)">&#128194; Open</button>
-          <button class="toolbar-btn" id="btn-save" title="Save (Ctrl+S) — Shift for Save As">&#128190; Save</button>
-          <button class="toolbar-btn" id="btn-delete" title="Delete">&#9746; Delete</button>
-          <button class="toolbar-btn" id="btn-preferences" title="Preferences (Ctrl+,)">&#9881; Prefs</button>
+          <button class="toolbar-btn" id="btn-preview" title="Markdown Viewer (Ctrl+Shift+P)" aria-label="Toggle Markdown viewer">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="toolbar-btn" id="btn-open" title="Open (Ctrl+O)" aria-label="Open file">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+          <button class="toolbar-btn" id="btn-save" title="Save (Ctrl+S) — Shift for Save As" aria-label="Save">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          </button>
+          <span class="toolbar-divider"></span>
+          <button class="toolbar-btn danger" id="btn-delete" title="Delete" aria-label="Delete note">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+          <button class="toolbar-btn" id="btn-preferences" title="Preferences (Ctrl+,)" aria-label="Preferences">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
       </div>
 
       <!-- Find Bar -->
       <div class="find-bar" id="find-bar" style="display: none;">
-        <span class="find-label">&#128269;</span>
+        <span class="find-label" aria-hidden="true">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </span>
         <input type="text" id="find-input" class="find-input" placeholder="Find...">
         <label class="find-case-label">
           <input type="checkbox" id="find-case"> Aa
         </label>
         <span class="find-match-count" id="find-match-count">0 matches</span>
-        <button class="find-nav-btn" id="find-prev" title="Previous">&#9650;</button>
-        <button class="find-nav-btn" id="find-next" title="Next">&#9660;</button>
-        <button class="find-close-btn" id="find-close" title="Close">&#10005;</button>
+        <button class="find-nav-btn" id="find-prev" title="Previous" aria-label="Previous match">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button class="find-nav-btn" id="find-next" title="Next" aria-label="Next match">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="find-close-btn" id="find-close" title="Close" aria-label="Close find">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
 
       <!-- Editor Content -->
       <div class="editor-content-wrapper">
         <div class="line-numbers" id="line-numbers" aria-hidden="true">1</div>
         <div class="find-highlight-overlay" id="find-highlight-overlay"></div>
-        <textarea id="note-content" class="note-content" placeholder="> Begin typing..." spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+        <textarea id="note-content" class="note-content" placeholder="Begin typing..." spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
         <div id="note-preview" class="note-preview" style="display: none;"></div>
       </div>
 
       <!-- Status Bar -->
       <div class="status-bar">
-        <span id="status-text">Ready.</span>
+        <span id="status-text">Ready</span>
         <div class="status-metrics">
           <span id="line-count" class="status-metric">0 lines</span>
           <span id="char-count" class="status-metric">0 chars</span>
@@ -99,15 +127,18 @@
   <!-- Preferences Modal -->
   <div class="modal-overlay" id="preferences-modal" style="display: none;">
     <div class="modal-box preferences-box">
-      <div class="preferences-header">&#9881; Preferences</div>
+      <div class="preferences-header">
+        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Preferences</span>
+      </div>
 
       <div class="preferences-section">
-        <div class="preferences-label">&gt; Theme</div>
+        <div class="preferences-label">Theme</div>
         <div class="preferences-options">
           <label class="preferences-option">
             <input type="radio" name="pref-theme" value="matrix">
             <span class="preferences-swatch" data-theme="matrix"></span>
-            <span>Matrix</span>
+            <span>Morpheus</span>
           </label>
           <label class="preferences-option">
             <input type="radio" name="pref-theme" value="vscode">
@@ -118,12 +149,12 @@
       </div>
 
       <div class="preferences-section">
-        <div class="preferences-label">&gt; Font Color</div>
+        <div class="preferences-label">Font Color</div>
         <div class="preferences-options">
           <label class="preferences-option">
             <input type="radio" name="pref-font-color" value="green">
             <span class="preferences-swatch" data-color="green"></span>
-            <span>Green</span>
+            <span>Accent</span>
           </label>
           <label class="preferences-option">
             <input type="radio" name="pref-font-color" value="white">
