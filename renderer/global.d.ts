@@ -11,6 +11,11 @@ export type ExternalFilePayload =
   | { filePath: string; content: string }
   | { filePath: string; error: string };
 
+export interface ExternalFileChangePayload {
+  filePath: string;
+  content: string;
+}
+
 export interface ElectronAPI {
   // Notes CRUD
   listNotes(): Promise<Note[]>;
@@ -33,6 +38,9 @@ export interface ElectronAPI {
 
   // External file open
   onOpenExternalFile(callback: (payload: ExternalFilePayload) => void): () => void;
+
+  // External file change (file modified by another program)
+  onExternalFileChange(callback: (payload: ExternalFileChangePayload) => void): () => void;
 }
 
 declare global {

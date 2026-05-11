@@ -795,6 +795,70 @@ window.electronAPI.onOpenExternalFile(async (payload) => {
   }
 });
 
+// Main process watches every file we've opened and fires this when the
+// file changes outside our control (other editor, OneDrive sync, git
+// pull, etc.). Match Notepad's behavior: refresh the editor in place.
+// If the user had unsaved edits we push them onto the undo stack so
+// Ctrl+Z brings them back.
+window.electronAPI.onExternalFileChange(async ({ filePath, content }) => {
+  const matching = notes.find(n => n.filePath === filePath);
+  if (!matching) return;
+
+  const isActive = activeNoteId === matching.id;
+  const currentEditorValue = isActive ? getEditorValue() : null;
+  // Compare to the note's stored content (last persisted/loaded copy) to
+  // judge whether the user has uncommitted edits that the reload would
+  // otherwise wipe.
+  const hadUnsavedEdits = isActive && currentEditorValue !== null && currentEditorValue !== matching.content;
+
+  await window.electronAPI.editNote(matching.id, matching.title, content);
+  notes = await window.electronAPI.listNotes();
+  renderNotesList(searchInput.value.toLowerCase());
+
+  if (!isActive) {
+    setStatus(`> ${filePath} reloaded from disk.`);
+    return;
+  }
+  if (currentEditorValue === content) {
+    // Editor already matches (e.g., we just saved). Re-baseline the undo
+    // stack so subsequent edits are recorded against the new value.
+    resetUndoTo(content);
+    return;
+  }
+
+  const wasFocused = document.activeElement === noteContentInput;
+  const caret = wasFocused ? getCaretOffset() : { start: 0, end: 0 };
+
+  if (hadUnsavedEdits) {
+    // Preserve the user's pre-reload state on the undo stack so Ctrl+Z
+    // can recover it.
+    snapshotEditorState();
+  }
+
+  setEditorValue(content);
+  applyEditorHighlighting();
+  updateCounts(content);
+
+  const clampedStart = Math.min(caret.start, content.length);
+  const clampedEnd = Math.min(caret.end, content.length);
+  if (wasFocused) {
+    setCaretOffset(clampedStart, clampedEnd);
+  }
+
+  if (hadUnsavedEdits) {
+    // Also snapshot the post-reload state so subsequent edits don't
+    // collapse straight back to the pre-reload version on Ctrl+Z.
+    snapshotEditorState();
+    setStatus('> File reloaded from disk. Ctrl+Z to recover unsaved edits.');
+  } else {
+    resetUndoTo(content, clampedStart, clampedEnd);
+    setStatus(`> ${filePath} reloaded from disk.`);
+  }
+
+  if (isPreviewMode) renderPreview();
+  if (findBar.style.display === 'flex') performFind();
+});
+
 /**
  * Delete current note
  */
@@ -1406,6 +1470,126 @@ function isMarkdownFile(): boolean {
       || title.endsWith('.md') || title.endsWith('.markdown');
 }
 
+const JSON_EXTS = ['.json', '.jsonc', '.geojson', '.json5'];
+
+function isJsonFile(): boolean {
+  const note = activeNoteId ? notes.find(n => n.id === activeNoteId) : null;
+  const path = (note?.filePath || '').toLowerCase();
+  const title = noteTitleInput.value.trim().toLowerCase();
+  if (JSON_EXTS.some(ext => path.endsWith(ext) || title.endsWith(ext))) return true;
+  return looksLikeJson(getEditorValue());
+}
+
+/**
+ * JSON has a strong dual signature — must start with { or [, AND must
+ * contain a "key": pattern. Both conditions together false-positive
+ * rarely on prose/code, unlike markdown's loose markers.
+ */
+function looksLikeJson(content: string): boolean {
+  const t = content.trim();
+  if (!t || (t[0] !== '{' && t[0] !== '[')) return false;
+  return /"[^"\\]*"\s*:/.test(t);
+}
+
+// ============================================
+// JSON SYNTAX HIGHLIGHTING
+// ============================================
+// Distinguishing keys from string values is the only non-trivial part:
+// after closing the string's ", peek-ahead past whitespace and check
+// whether the next character is ':'. This is also what VSCode does.
+
+function tokenizeJson(source: string): string {
+  let i = 0;
+  const n = source.length;
+  let out = '';
+  let plain = '';
+
+  const flush = () => {
+    if (plain) {
+      out += escapeHtml(plain);
+      plain = '';
+    }
+  };
+  const emit = (cls: string, text: string) => {
+    flush();
+    out += `<span class="tok-json-${cls}">${escapeHtml(text)}</span>`;
+  };
+
+  while (i < n) {
+    const c = source[i];
+
+    // Line comment (JSONC) — '//' to EOL.
+    if (c === '/' && source[i + 1] === '/') {
+      let j = i;
+      while (j < n && source[j] !== '\n') j++;
+      emit('comment', source.substring(i, j));
+      i = j;
+      continue;
+    }
+    // Block comment (JSONC) — /* ... */, may span lines.
+    if (c === '/' && source[i + 1] === '*') {
+      let j = i + 2;
+      while (j < n - 1 && !(source[j] === '*' && source[j + 1] === '/')) j++;
+      j = Math.min(n, j + 2);
+      emit('comment', source.substring(i, j));
+      i = j;
+      continue;
+    }
+
+    // String — handle escapes; stop at unescaped " or \n (latter for
+    // graceful mid-typing behavior).
+    if (c === '"') {
+      let j = i + 1;
+      while (j < n && source[j] !== '"' && source[j] !== '\n') {
+        if (source[j] === '\\' && j + 1 < n) j += 2;
+        else j++;
+      }
+      if (j < n && source[j] === '"') j++;
+      // Key vs value: look past whitespace for a ':'.
+      let k = j;
+      while (k < n && (source[k] === ' ' || source[k] === '\t')) k++;
+      const isKey = source[k] === ':';
+      emit(isKey ? 'key' : 'string', source.substring(i, j));
+      i = j;
+      continue;
+    }
+
+    // Number (JSON spec: no leading zeros except for 0 itself, optional
+    // fraction, optional exponent).
+    if (c === '-' || (c >= '0' && c <= '9')) {
+      const m = source.substring(i).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+      if (m) {
+        emit('number', m[0]);
+        i += m[0].length;
+        continue;
+      }
+    }
+
+    // Keywords
+    if (c === 't' || c === 'f' || c === 'n') {
+      const m = source.substring(i).match(/^(?:true|false|null)\b/);
+      if (m) {
+        emit(m[0] === 'null' ? 'null' : 'bool', m[0]);
+        i += m[0].length;
+        continue;
+      }
+    }
+
+    // Punctuation
+    if (c === '{' || c === '}' || c === '[' || c === ']' || c === ',' || c === ':') {
+      emit('punct', c);
+      i++;
+      continue;
+    }
+
+    plain += c;
+    i++;
+  }
+
+  flush();
+  return out;
+}
+
 // ============================================
 // MARKDOWN SYNTAX HIGHLIGHTING
 // ============================================
@@ -1605,8 +1789,11 @@ function applyEditorHighlighting(): void {
 
   const isPython = isPythonFile();
   const isMarkdown = !isPython && isMarkdownFile();
-  // Only Python turns off soft-wrap; markdown is prose.
+  const isJson = !isPython && !isMarkdown && isJsonFile();
+  // Python and JSON turn off soft-wrap (structured/code formats);
+  // markdown stays soft-wrapped because it's prose.
   noteContentInput.classList.toggle('python-mode', isPython);
+  noteContentInput.classList.toggle('json-mode', isJson);
 
   const value = getEditorValue();
   const wasFocused = document.activeElement === noteContentInput;
@@ -1616,6 +1803,8 @@ function applyEditorHighlighting(): void {
     setEditorHTML(tokenizePython(value));
   } else if (isMarkdown) {
     setEditorHTML(tokenizeMarkdown(value));
+  } else if (isJson) {
+    setEditorHTML(tokenizeJson(value));
   } else {
     // Plain mode: only re-set textContent when there's HTML cruft to
     // clear (e.g., leftover token spans after switching out of a

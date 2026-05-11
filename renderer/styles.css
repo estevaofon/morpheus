@@ -481,9 +481,10 @@ button {
      source of truth. */
 }
 
-/* Python files: turn off soft-wrap so each logical line is one visual
-   line, like a normal code editor. */
-.note-content.python-mode {
+/* Python and JSON: turn off soft-wrap so each logical line is one
+   visual line, like a normal code editor. Markdown stays wrapped. */
+.note-content.python-mode,
+.note-content.json-mode {
   white-space: pre;
 }
 
@@ -540,6 +541,15 @@ button {
 .tok-md-blockquote { color: #93c5fd; font-style: italic; }
 .tok-md-hr         { color: #a1a1aa; }
 .tok-md-html       { color: #c084fc; }
+
+/* JSON token palette (Morpheus default) */
+.tok-json-key     { color: #5eead4; }
+.tok-json-string  { color: #fbbf24; }
+.tok-json-number  { color: #fb923c; }
+.tok-json-bool    { color: #c084fc; font-weight: 500; }
+.tok-json-null    { color: #f472b6; font-style: italic; }
+.tok-json-comment { color: #6b7280; font-style: italic; }
+.tok-json-punct   { color: #71717a; }
 
 /* ============================================
    MARKDOWN PREVIEW
@@ -1295,3 +1305,12 @@ body.theme-vscode .tok-md-list       { color: #6796e6; font-weight: 600; }
 body.theme-vscode .tok-md-blockquote { color: #608b4e; font-style: italic; }
 body.theme-vscode .tok-md-hr         { color: #858585; }
 body.theme-vscode .tok-md-html       { color: #808080; }
+
+/* VS Code Dark+ JSON palette (canonical) */
+body.theme-vscode .tok-json-key     { color: #9cdcfe; }
+body.theme-vscode .tok-json-string  { color: #ce9178; }
+body.theme-vscode .tok-json-number  { color: #b5cea8; }
+body.theme-vscode .tok-json-bool    { color: #569cd6; font-weight: 400; }
+body.theme-vscode .tok-json-null    { color: #569cd6; font-style: normal; }
+body.theme-vscode .tok-json-comment { color: #6a9955; font-style: italic; }
+body.theme-vscode .tok-json-punct   { color: #d4d4d4; }

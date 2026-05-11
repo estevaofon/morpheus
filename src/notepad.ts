@@ -43,12 +43,49 @@ async function initNotes(): Promise<void> {
 
 export async function loadNotes(): Promise<Note[]> {
   await initNotes();
+  const dataFile = getDataFile();
+  let raw: string;
   try {
-    const data = await fs.readFile(getDataFile(), 'utf-8');
-    return JSON.parse(data) as Note[];
+    raw = await fs.readFile(dataFile, 'utf-8');
   } catch {
     return [];
   }
+  try {
+    return JSON.parse(raw) as Note[];
+  } catch {
+    // Corrupt index — usually trailing garbage from an older, longer
+    // file body that wasn't fully overwritten (e.g., OneDrive / AV
+    // interference). Quarantine the bad file and try to salvage the
+    // longest valid JSON-array prefix before falling back to empty.
+    // Returning [] silently here would let the next save permanently
+    // wipe the user's notes.
+    const backupPath = `${dataFile}.corrupt-${Date.now()}`;
+    try { await fs.writeFile(backupPath, raw); } catch {}
+    const recovered = recoverNotesPrefix(raw);
+    if (recovered) {
+      try { await fs.writeFile(dataFile, JSON.stringify(recovered, null, 2)); } catch {}
+      return recovered;
+    }
+    return [];
+  }
+}
+
+/**
+ * Scan backward through the buffer for the latest ']' position whose prefix
+ * parses as a JSON array of notes. Lets us recover the user's data when the
+ * file got tail-corrupted but the actual note records are intact.
+ */
+function recoverNotesPrefix(raw: string): Note[] | null {
+  for (let i = raw.length - 1; i >= 0; i--) {
+    if (raw.charCodeAt(i) !== 0x5d /* ']' */) continue;
+    try {
+      const parsed = JSON.parse(raw.substring(0, i + 1));
+      if (Array.isArray(parsed)) return parsed as Note[];
+    } catch {
+      // try the next ']' further left
+    }
+  }
+  return null;
 }
 
 async function saveNotes(notes: Note[]): Promise<void> {

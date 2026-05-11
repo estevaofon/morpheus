@@ -4,6 +4,11 @@ export type ExternalFilePayload =
   | { filePath: string; content: string }
   | { filePath: string; error: string };
 
+export interface ExternalFileChangePayload {
+  filePath: string;
+  content: string;
+}
+
 export interface Note {
   id: string;
   title: string;
@@ -46,5 +51,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event: IpcRendererEvent, payload: ExternalFilePayload) => callback(payload);
     ipcRenderer.on('file:openExternal', listener);
     return () => ipcRenderer.removeListener('file:openExternal', listener);
+  },
+
+  // Fires when a file the app has loaded is modified by another program
+  onExternalFileChange: (callback: (payload: ExternalFileChangePayload) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, payload: ExternalFileChangePayload) => callback(payload);
+    ipcRenderer.on('file:externalChange', listener);
+    return () => ipcRenderer.removeListener('file:externalChange', listener);
   },
 });
