@@ -258,10 +258,84 @@ function updateCounts(text: string): void {
   renderLineNumbers(lines);
 }
 
+// JSON folding state. Tracked by 1-indexed starting line number of each
+// folded region; regions themselves are recomputed every retokenization.
+let foldedJsonLines: Set<number> = new Set();
+let jsonFoldRegions: JsonFoldRegion[] = [];
+
 function renderLineNumbers(count: number): void {
-  const parts = new Array(count);
-  for (let i = 0; i < count; i++) parts[i] = String(i + 1);
-  lineNumbersEl.textContent = parts.join('\n');
+  const foldStarts = new Map<number, JsonFoldRegion>();
+  for (const r of jsonFoldRegions) foldStarts.set(r.startLine, r);
+
+  // Lines hidden by an active fold get no gutter row either, so the
+  // editor's visible line flow and the gutter stay aligned.
+  const hidden = new Set<number>();
+  for (const start of foldedJsonLines) {
+    const r = foldStarts.get(start);
+    if (!r) continue;
+    for (let l = start + 1; l < r.endLine; l++) hidden.add(l);
+  }
+
+  const rows: string[] = new Array(count);
+  let rowCount = 0;
+  for (let i = 1; i <= count; i++) {
+    if (hidden.has(i)) continue;
+    const region = foldStarts.get(i);
+    const isFolded = foldedJsonLines.has(i);
+    const marker = region
+      ? `<span class="fold-marker" data-fold-line="${i}" title="${isFolded ? 'Unfold' : 'Fold'}">${isFolded ? '▶' : '▼'}</span>`
+      : '<span class="fold-marker fold-marker-empty"></span>';
+    rows[rowCount++] = `<div class="line-num-row"><span class="line-num">${i}</span>${marker}</div>`;
+  }
+  rows.length = rowCount;
+  lineNumbersEl.innerHTML = rows.join('');
+}
+
+/**
+ * Hide line spans inside collapsed regions and mark each region's start
+ * span as folded (CSS adds a ⋯ pseudo-element). Drops folds whose start
+ * line is no longer a valid fold-region opener (e.g., the user typed
+ * and broke the brace structure).
+ */
+function applyJsonFolds(): void {
+  const foldStarts = new Map<number, JsonFoldRegion>();
+  for (const r of jsonFoldRegions) foldStarts.set(r.startLine, r);
+
+  // Clear stale classes from whatever the previous render left behind.
+  noteContentInput.querySelectorAll<HTMLElement>('.json-line').forEach(el => {
+    el.classList.remove('json-line-hidden');
+    el.classList.remove('json-line-folded');
+  });
+
+  const valid = new Set<number>();
+  for (const start of foldedJsonLines) {
+    if (foldStarts.has(start)) valid.add(start);
+  }
+  foldedJsonLines = valid;
+
+  for (const start of foldedJsonLines) {
+    const r = foldStarts.get(start)!;
+    const startSpan = noteContentInput.querySelector<HTMLElement>(`.json-line[data-line="${start}"]`);
+    if (startSpan) startSpan.classList.add('json-line-folded');
+    for (let l = start + 1; l < r.endLine; l++) {
+      const span = noteContentInput.querySelector<HTMLElement>(`.json-line[data-line="${l}"]`);
+      if (span) span.classList.add('json-line-hidden');
+    }
+  }
+}
+
+function toggleJsonFold(line: number): void {
+  if (foldedJsonLines.has(line)) foldedJsonLines.delete(line);
+  else foldedJsonLines.add(line);
+  applyJsonFolds();
+  const value = getEditorValue();
+  const count = value.length === 0 ? 1 : value.split(/\r\n|\r|\n/).length;
+  renderLineNumbers(count);
+}
+
+function resetJsonFolds(): void {
+  foldedJsonLines = new Set();
+  jsonFoldRegions = [];
 }
 
 // Confirm modal elements
@@ -362,6 +436,15 @@ noteContentInput.addEventListener('input', () => {
 
 noteContentInput.addEventListener('scroll', () => {
   lineNumbersEl.scrollTop = noteContentInput.scrollTop;
+});
+
+// Click anywhere on a fold marker in the gutter to toggle the region.
+// Event delegation since markers are re-rendered on every keystroke.
+lineNumbersEl.addEventListener('click', (e) => {
+  const marker = (e.target as HTMLElement).closest<HTMLElement>('.fold-marker[data-fold-line]');
+  if (!marker) return;
+  const line = parseInt(marker.dataset.foldLine || '0', 10);
+  if (line > 0) toggleJsonFold(line);
 });
 
 // Snapshot the pre-edit state on every input — coalesced by time, so a
@@ -558,6 +641,9 @@ async function selectNote(id: string): Promise<void> {
   if (note) {
     noteTitleInput.value = note.title;
     setEditorValue(note.content);
+    // Drop any folds from the previously-active note so the new one
+    // starts fully expanded.
+    resetJsonFolds();
     updateCounts(note.content);
     applyEditorHighlighting();
     // Reset undo history to this note's loaded content as the baseline.
@@ -836,6 +922,9 @@ window.electronAPI.onExternalFileChange(async ({ filePath, content }) => {
   }
 
   setEditorValue(content);
+  // External replacement — drop folds; the new content may have a
+  // wholly different structure and old line numbers are meaningless.
+  resetJsonFolds();
   applyEditorHighlighting();
   updateCounts(content);
 
@@ -1492,17 +1581,27 @@ function looksLikeJson(content: string): boolean {
 }
 
 // ============================================
-// JSON SYNTAX HIGHLIGHTING
+// JSON SYNTAX HIGHLIGHTING + FOLDING
 // ============================================
 // Distinguishing keys from string values is the only non-trivial part:
 // after closing the string's ", peek-ahead past whitespace and check
 // whether the next character is ':'. This is also what VSCode does.
+//
+// For folding, each source line is wrapped in <span class="json-line"
+// data-line="N">…\n</span>. The \n is inside the span so hiding the
+// span via display:none drops the line break too. Block-comment state
+// carries between lines so a multi-line /* */ keeps its color.
 
-function tokenizeJson(source: string): string {
+interface JsonLineState {
+  inBlockComment: boolean;
+}
+
+function tokenizeJsonLine(source: string, state: JsonLineState): { html: string; state: JsonLineState } {
   let i = 0;
   const n = source.length;
   let out = '';
   let plain = '';
+  let inBlockComment = state.inBlockComment;
 
   const flush = () => {
     if (plain) {
@@ -1515,32 +1614,48 @@ function tokenizeJson(source: string): string {
     out += `<span class="tok-json-${cls}">${escapeHtml(text)}</span>`;
   };
 
+  // Carry-over: previous line ended inside an unclosed block comment.
+  if (inBlockComment) {
+    const endIdx = source.indexOf('*/');
+    if (endIdx !== -1) {
+      emit('comment', source.substring(0, endIdx + 2));
+      i = endIdx + 2;
+      inBlockComment = false;
+    } else {
+      emit('comment', source);
+      return { html: out, state: { inBlockComment: true } };
+    }
+  }
+
   while (i < n) {
     const c = source[i];
 
     // Line comment (JSONC) — '//' to EOL.
     if (c === '/' && source[i + 1] === '/') {
-      let j = i;
-      while (j < n && source[j] !== '\n') j++;
-      emit('comment', source.substring(i, j));
-      i = j;
+      emit('comment', source.substring(i));
+      i = n;
       continue;
     }
-    // Block comment (JSONC) — /* ... */, may span lines.
+    // Block comment (JSONC) — /* ... */. If unterminated on this line,
+    // emit through EOL and flag the carry state for the next line.
     if (c === '/' && source[i + 1] === '*') {
-      let j = i + 2;
-      while (j < n - 1 && !(source[j] === '*' && source[j + 1] === '/')) j++;
-      j = Math.min(n, j + 2);
-      emit('comment', source.substring(i, j));
-      i = j;
+      const endIdx = source.indexOf('*/', i + 2);
+      if (endIdx !== -1) {
+        emit('comment', source.substring(i, endIdx + 2));
+        i = endIdx + 2;
+      } else {
+        emit('comment', source.substring(i));
+        i = n;
+        inBlockComment = true;
+      }
       continue;
     }
 
-    // String — handle escapes; stop at unescaped " or \n (latter for
-    // graceful mid-typing behavior).
+    // String — handle escapes; stop at unescaped " (lines never embed
+    // raw \n because we tokenize one line at a time).
     if (c === '"') {
       let j = i + 1;
-      while (j < n && source[j] !== '"' && source[j] !== '\n') {
+      while (j < n && source[j] !== '"') {
         if (source[j] === '\\' && j + 1 < n) j += 2;
         else j++;
       }
@@ -1587,7 +1702,86 @@ function tokenizeJson(source: string): string {
   }
 
   flush();
-  return out;
+  return { html: out, state: { inBlockComment } };
+}
+
+function tokenizeJson(source: string): string {
+  const lines = source.split('\n');
+  const parts: string[] = [];
+  let state: JsonLineState = { inBlockComment: false };
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const isLast = idx === lines.length - 1;
+    const trailingNL = isLast ? '' : '\n';
+    const result = tokenizeJsonLine(lines[idx], state);
+    state = result.state;
+    // The trailing \n is kept inside the line span so display:none on a
+    // folded line removes the line break alongside the content.
+    parts.push(
+      `<span class="json-line" data-line="${idx + 1}">${result.html}${escapeHtml(trailingNL)}</span>`
+    );
+  }
+
+  return parts.join('');
+}
+
+/**
+ * Find every {…} / […] pair whose opener and closer are on different
+ * lines with at least one content line between them. Skips braces
+ * inside strings and JSONC comments.
+ */
+interface JsonFoldRegion {
+  startLine: number;
+  endLine: number;
+  openChar: '{' | '[';
+}
+
+function computeJsonFoldRegions(source: string): JsonFoldRegion[] {
+  const regions: JsonFoldRegion[] = [];
+  const stack: Array<{ line: number; char: '{' | '[' }> = [];
+  let line = 1;
+  let inString = false;
+  let escapeNext = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '\n') {
+      line++;
+      inLineComment = false;
+      continue;
+    }
+    if (inLineComment) continue;
+    if (inBlockComment) {
+      if (c === '*' && source[i + 1] === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      if (escapeNext) { escapeNext = false; continue; }
+      if (c === '\\') { escapeNext = true; continue; }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') { inString = true; continue; }
+    if (c === '/' && source[i + 1] === '/') { inLineComment = true; i++; continue; }
+    if (c === '/' && source[i + 1] === '*') { inBlockComment = true; i++; continue; }
+    if (c === '{' || c === '[') {
+      stack.push({ line, char: c as '{' | '[' });
+    } else if (c === '}' || c === ']') {
+      const top = stack.pop();
+      // Foldable iff there's at least one content line between opener
+      // and closer. {…} on the same line, or }/] on the next line with
+      // no content, isn't worth a fold marker.
+      if (top && top.line + 1 < line) {
+        regions.push({ startLine: top.line, endLine: line, openChar: top.char });
+      }
+    }
+  }
+  return regions;
 }
 
 // ============================================
@@ -1801,10 +1995,19 @@ function applyEditorHighlighting(): void {
 
   if (isPython) {
     setEditorHTML(tokenizePython(value));
+    resetJsonFolds();
   } else if (isMarkdown) {
     setEditorHTML(tokenizeMarkdown(value));
+    resetJsonFolds();
   } else if (isJson) {
+    // Fold regions must be recomputed before tokenizing so the gutter
+    // renderer (called from setEditorHTML's downstream re-render path)
+    // sees up-to-date regions and can re-validate existing folds.
+    jsonFoldRegions = computeJsonFoldRegions(value);
     setEditorHTML(tokenizeJson(value));
+    applyJsonFolds();
+    const lineCount = value.length === 0 ? 1 : value.split(/\r\n|\r|\n/).length;
+    renderLineNumbers(lineCount);
   } else {
     // Plain mode: only re-set textContent when there's HTML cruft to
     // clear (e.g., leftover token spans after switching out of a
@@ -1813,6 +2016,7 @@ function applyEditorHighlighting(): void {
     if (noteContentInput.querySelector('span, mark')) {
       setEditorValue(value);
     }
+    resetJsonFolds();
   }
 
   if (caret) setCaretOffset(caret.start, caret.end);
