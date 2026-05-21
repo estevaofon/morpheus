@@ -7,6 +7,8 @@ release/
 *.tsbuildinfo
 renderer/*.js
 renderer/*.js.map
+/app.js
+.asar-verify/
 !renderer/marked.umd.js
 !renderer/purify.min.js
 !renderer/mermaid.min.js

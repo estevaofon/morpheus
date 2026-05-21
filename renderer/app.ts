@@ -422,13 +422,39 @@ findCase?.addEventListener('change', () => performFind());
 findPrevBtn?.addEventListener('click', () => navigateFind(-1));
 findNextBtn?.addEventListener('click', () => navigateFind(1));
 
+// Content this large makes per-keystroke re-tokenization visibly stutter
+// (full tokenize + setEditorHTML across hundreds of KB). Debounce so the
+// highlight catches up after the user pauses, instead of running it
+// synchronously on every keystroke. Caret/text behavior is unaffected;
+// only the syntax colors lag briefly.
+const HEAVY_HIGHLIGHT_THRESHOLD = 50_000;
+const HEAVY_HIGHLIGHT_DEBOUNCE_MS = 250;
+let highlightDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cancelPendingHighlight(): void {
+  if (highlightDebounceTimer !== null) {
+    clearTimeout(highlightDebounceTimer);
+    highlightDebounceTimer = null;
+  }
+}
+
 // Character count + auto-create note on first keystroke
 noteContentInput.addEventListener('input', () => {
   const value = getEditorValue();
   updateCounts(value);
   if (value) void ensureActiveNote();
-  // Re-tokenize Python files in place. Caret offset is preserved across
-  // the innerHTML replacement.
+  // Re-tokenize in place. Caret offset is preserved across the
+  // innerHTML replacement. For very large content we debounce so a
+  // burst of typing doesn't re-tokenize the entire buffer on every key.
+  if (value.length > HEAVY_HIGHLIGHT_THRESHOLD) {
+    cancelPendingHighlight();
+    highlightDebounceTimer = setTimeout(() => {
+      highlightDebounceTimer = null;
+      applyEditorHighlighting();
+      if (findBar.style.display === 'flex') performFind();
+    }, HEAVY_HIGHLIGHT_DEBOUNCE_MS);
+    return;
+  }
   applyEditorHighlighting();
   // Re-run find if find bar is open
   if (findBar.style.display === 'flex') performFind();
@@ -639,15 +665,26 @@ async function selectNote(id: string): Promise<void> {
   activeNoteId = id;
   const note = await window.electronAPI.getNote(id);
   if (note) {
+    // Compacted-JSON guard: a note whose stored content is a minified
+    // JSON (from a previous open, or recent paste) would freeze the
+    // editor on display. Pretty-print and persist before loading so
+    // both the editor and the next re-open start from the safe form.
+    let content = note.content;
+    const formatted = maybePrettyPrintJson(note.filePath || note.title, content);
+    if (formatted !== content) {
+      content = formatted;
+      await window.electronAPI.editNote(id, note.title, content);
+      notes = await window.electronAPI.listNotes();
+    }
     noteTitleInput.value = note.title;
-    setEditorValue(note.content);
+    setEditorValue(content);
     // Drop any folds from the previously-active note so the new one
     // starts fully expanded.
     resetJsonFolds();
-    updateCounts(note.content);
+    updateCounts(content);
     applyEditorHighlighting();
     // Reset undo history to this note's loaded content as the baseline.
-    resetUndoTo(note.content);
+    resetUndoTo(content);
     renderNotesList(searchInput.value.toLowerCase());
     setStatus(`> Viewing: ${note.title}`);
     hideFindBar();
@@ -855,13 +892,17 @@ async function openFileFlow(): Promise<void> {
 async function loadFileIntoEditor(filePath: string, content: string): Promise<void> {
   const existing = await window.electronAPI.findNoteByFilePath(filePath);
   if (existing) {
+    // selectNote auto-formats compacted JSON for existing notes.
     notes = await window.electronAPI.listNotes();
     await selectNote(existing.id);
     setStatus(`> Opened existing note for ${filePath}`);
     return;
   }
 
-  const created = await window.electronAPI.createNote(filePath, content);
+  // Pretty-print compacted JSON before storing so the freshly-created
+  // note's first selectNote pass doesn't have to repeat the work.
+  const formatted = maybePrettyPrintJson(filePath, content);
+  const created = await window.electronAPI.createNote(filePath, formatted);
   await window.electronAPI.setNoteFilePath(created.id, filePath);
   notes = await window.electronAPI.listNotes();
   await selectNote(created.id);
@@ -889,6 +930,9 @@ window.electronAPI.onOpenExternalFile(async (payload) => {
 window.electronAPI.onExternalFileChange(async ({ filePath, content }) => {
   const matching = notes.find(n => n.filePath === filePath);
   if (!matching) return;
+
+  // Pretty-print compacted JSON before letting it land in the editor.
+  content = maybePrettyPrintJson(filePath, content);
 
   const isActive = activeNoteId === matching.id;
   const currentEditorValue = isActive ? getEditorValue() : null;
@@ -1581,6 +1625,58 @@ function looksLikeJson(content: string): boolean {
 }
 
 // ============================================
+// COMPACTED JSON AUTO-FORMAT
+// ============================================
+// A 196KB minified JSON on a single line freezes the renderer: the
+// tokenizer emits one <span> per token (~30K of them) into a single
+// .json-line whose .json-mode container is white-space:pre, so the
+// browser has to lay out millions of pixels of un-wrapped content.
+// Pretty-printing on open turns that one line into thousands of short
+// lines that the layout engine can handle.
+
+// Long enough that a single visual line of this many chars (no wrap)
+// will visibly stutter; short enough that ordinary code with the
+// occasional long string still tokenizes normally.
+const COMPACTED_JSON_LINE_THRESHOLD = 5000;
+
+function isJsonByPathOrTitle(...names: Array<string | undefined>): boolean {
+  for (const name of names) {
+    if (!name) continue;
+    const lower = name.toLowerCase();
+    if (JSON_EXTS.some(ext => lower.endsWith(ext))) return true;
+  }
+  return false;
+}
+
+/** Parse and re-emit with 2-space indentation. Returns null if invalid JSON. */
+function tryPrettyPrintJson(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * If the content is JSON (by extension or by content shape) and is
+ * "compacted" — entirely on one line, or contains a single line long
+ * enough to stall layout — return the pretty-printed form. Falls back
+ * to the original on parse failure, so we never lose user content.
+ */
+function maybePrettyPrintJson(filePathOrTitle: string | undefined, content: string): string {
+  if (!content) return content;
+  const isJsonByExt = isJsonByPathOrTitle(filePathOrTitle);
+  if (!isJsonByExt && !looksLikeJson(content)) return content;
+  const lines = content.split('\n');
+  const hasLongLine =
+    lines.length === 1 || lines.some(l => l.length > COMPACTED_JSON_LINE_THRESHOLD);
+  if (!hasLongLine) return content;
+  const pretty = tryPrettyPrintJson(content);
+  return pretty ?? content;
+}
+
+// ============================================
 // JSON SYNTAX HIGHLIGHTING + FOLDING
 // ============================================
 // Distinguishing keys from string values is the only non-trivial part:
@@ -1705,6 +1801,13 @@ function tokenizeJsonLine(source: string, state: JsonLineState): { html: string;
   return { html: out, state: { inBlockComment } };
 }
 
+// Hard backstop: any line longer than this is emitted as plain escaped
+// text (no per-token <span>s). maybePrettyPrintJson on open normally
+// prevents this case, but it kicks in for invalid-JSON files that
+// pretty-print couldn't fix, or formatted JSON containing one giant
+// string value.
+const JSON_TOKENIZE_LINE_LIMIT = 5000;
+
 function tokenizeJson(source: string): string {
   const lines = source.split('\n');
   const parts: string[] = [];
@@ -1713,12 +1816,22 @@ function tokenizeJson(source: string): string {
   for (let idx = 0; idx < lines.length; idx++) {
     const isLast = idx === lines.length - 1;
     const trailingNL = isLast ? '' : '\n';
-    const result = tokenizeJsonLine(lines[idx], state);
-    state = result.state;
+    const line = lines[idx];
+    let html: string;
+    if (line.length > JSON_TOKENIZE_LINE_LIMIT) {
+      // Per-token spans on a non-wrapping visual line of this length
+      // would freeze layout. Render plain — user still sees the text,
+      // just without syntax colors on this one line.
+      html = escapeHtml(line);
+    } else {
+      const result = tokenizeJsonLine(line, state);
+      state = result.state;
+      html = result.html;
+    }
     // The trailing \n is kept inside the line span so display:none on a
     // folded line removes the line break alongside the content.
     parts.push(
-      `<span class="json-line" data-line="${idx + 1}">${result.html}${escapeHtml(trailingNL)}</span>`
+      `<span class="json-line" data-line="${idx + 1}">${html}${escapeHtml(trailingNL)}</span>`
     );
   }
 
@@ -1980,6 +2093,10 @@ function tokenizeMarkdown(source: string): string {
  */
 function applyEditorHighlighting(): void {
   if (isPreviewMode) return;
+  // Drop any debounced re-highlight queued from a recent input burst —
+  // we're highlighting now, so a delayed second run would be redundant
+  // and could clobber a fresh state set by the direct caller.
+  cancelPendingHighlight();
 
   const isPython = isPythonFile();
   const isMarkdown = !isPython && isMarkdownFile();
