@@ -494,17 +494,88 @@ noteContentInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Tab key inserts 2 spaces instead of changing focus.
+/**
+ * Compute the result of outdenting (Shift+Tab) every line the selection
+ * touches, VSCode-style. Removes up to one indent level from each line's
+ * start — two leading spaces, or a single leading tab. Lines with no
+ * leading whitespace are left alone. The caret/selection is shifted left
+ * to stay anchored to the same characters. Returns null when there's
+ * nothing to strip, so the caller can skip the edit (and the undo step).
+ */
+function computeOutdent(
+  value: string,
+  start: number,
+  end: number,
+): { value: string; start: number; end: number } | null {
+  const INDENT_WIDTH = 2; // keep in sync with the 2-space Tab indent
+
+  // First line of the affected range: the line containing `start`.
+  const firstLineStart = value.lastIndexOf('\n', start - 1) + 1;
+  // A selection that ends exactly at a line start (right after a "\n")
+  // doesn't visually touch that trailing line, so don't outdent it —
+  // matches VSCode. For a caret or single-line selection this is a no-op.
+  const lineSelEnd = end > start && value[end - 1] === '\n' ? end - 1 : end;
+  let lastLineEnd = value.indexOf('\n', lineSelEnd);
+  if (lastLineEnd === -1) lastLineEnd = value.length;
+
+  const before = value.slice(0, firstLineStart);
+  const region = value.slice(firstLineStart, lastLineEnd);
+  const after = value.slice(lastLineEnd);
+
+  let totalRemoved = 0;
+  let removedBeforeStart = 0;
+  let removedBeforeEnd = 0;
+  let lineOffset = firstLineStart; // absolute offset of the current line start
+
+  const outdented = region.split('\n').map((line) => {
+    let remove = 0;
+    if (line[0] === '\t') {
+      remove = 1;
+    } else {
+      while (remove < INDENT_WIDTH && line[remove] === ' ') remove++;
+    }
+    if (remove > 0) {
+      // The stripped chars span [lineOffset, lineOffset + remove). Count how
+      // many fall before start / end so the selection tracks the same text.
+      const stripEnd = lineOffset + remove;
+      removedBeforeStart += Math.max(0, Math.min(stripEnd, start) - lineOffset);
+      removedBeforeEnd += Math.max(0, Math.min(stripEnd, end) - lineOffset);
+      totalRemoved += remove;
+    }
+    lineOffset += line.length + 1; // +1 for the '\n' consumed by split
+    return line.slice(remove);
+  });
+
+  if (totalRemoved === 0) return null;
+
+  return {
+    value: before + outdented.join('\n') + after,
+    start: start - removedBeforeStart,
+    end: end - removedBeforeEnd,
+  };
+}
+
+// Tab indents; Shift+Tab outdents — VSCode-style. Indent unit is 2 spaces.
 noteContentInput.addEventListener('keydown', (e) => {
   if (e.key !== 'Tab') return;
   e.preventDefault();
-  // Tab is a structural edit — record state before mutating.
-  snapshotEditorState();
+
   const value = getEditorValue();
   const { start, end } = getCaretOffset();
 
-  if (start !== end && value.substring(start, end).includes('\n')) {
+  if (e.shiftKey) {
+    // Shift+Tab: outdent the touched lines. Bail out before snapshotting
+    // when there's no leading whitespace to remove, so undo isn't polluted
+    // with no-op steps.
+    const result = computeOutdent(value, start, end);
+    if (!result) return;
+    snapshotEditorState();
+    setEditorValue(result.value);
+    applyEditorHighlighting();
+    setCaretOffset(result.start, result.end);
+  } else if (start !== end && value.substring(start, end).includes('\n')) {
     // Multi-line selection: indent every line in the range.
+    snapshotEditorState();
     const selected = value.substring(start, end);
     const indented = selected.replace(/^/gm, '  ');
     setEditorValue(value.substring(0, start) + indented + value.substring(end));
@@ -512,6 +583,7 @@ noteContentInput.addEventListener('keydown', (e) => {
     setCaretOffset(start, start + indented.length);
   } else {
     // Single position (or single-line selection): just insert two spaces.
+    snapshotEditorState();
     setEditorValue(value.substring(0, start) + '  ' + value.substring(end));
     applyEditorHighlighting();
     setCaretOffset(start + 2);
@@ -2165,3 +2237,35 @@ const initialPrefs = loadPreferences();
 applyFontColor(initialPrefs.fontColor);
 applyTheme(initialPrefs.theme);
 loadNotes();
+
+// ============================================
+// TEST EXPORTS
+// ============================================
+// In the browser this file is loaded as a classic <script>, where `module`
+// is undefined, so this guard is false and the block is dead code — the app
+// loads exactly as before. Under CommonJS (ts-jest in the unit tests), the
+// guard is true and we expose internal pure/logic functions so they can be
+// tested directly, without changing how the app runs in production.
+// @ts-ignore — `module` is intentionally undeclared in the renderer's DOM typings
+if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+  // @ts-ignore
+  module.exports = {
+    computeOutdent,
+    computeJsonFoldRegions,
+    tokenizePython,
+    tokenizeJson,
+    tokenizeJsonLine,
+    tokenizeMarkdown,
+    wrapMatchesInElement,
+    looksLikePython,
+    looksLikeJson,
+    isJsonByPathOrTitle,
+    tryPrettyPrintJson,
+    maybePrettyPrintJson,
+    sanitizeFilename,
+    truncateMiddle,
+    escapeRegex,
+    escapeHtml,
+    highlightText,
+  };
+}

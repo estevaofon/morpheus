@@ -53,7 +53,31 @@ npm run build      # compile main (tsconfig.json) + renderer (tsconfig.renderer.
 npm start          # run app (requires build)
 npm run dev        # tsc --watch for both projects + electron
 npm run package    # build installer via electron-builder
+npm test           # run the unit test suite (Jest)
+npm run test:watch # re-run tests on change
 ```
+
+## Testing
+
+Unit tests (Jest + ts-jest) guard the editor's core logic so refactors don't
+silently break behavior. Run them with `npm test`.
+
+```
+tests/
+  editor-logic.test.ts      # indent/outdent math, JSON fold regions, file-type
+                            #   detection, JSON auto-format, string utilities
+  editor-highlight.test.ts  # Python/JSON/Markdown tokenizers, HTML escaping,
+                            #   search-match highlighting (find)
+  notepad.test.ts           # notes CRUD + corrupt-index recovery (data layer)
+  helpers/app-harness.ts    # loads renderer/app.ts into jsdom for testing
+```
+
+`renderer/app.ts` runs as a classic browser script, so it can't use ES
+`export`. The harness instead requires it under CommonJS (ts-jest) via a
+guarded `module.exports` block at the bottom of the file that is dead code in
+the browser (`typeof module === 'undefined'` there) — production loading is
+unchanged. The harness injects the real `renderer/index.html` body into jsdom
+so the editor's load-time DOM lookups resolve exactly as in the app.
 
 ## Shortcuts
 

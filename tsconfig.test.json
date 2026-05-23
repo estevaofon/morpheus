@@ -1,0 +1,21 @@
+{
+  "//": "Compiler options used ONLY by ts-jest when running the unit tests.",
+  "//2": "module=commonjs lets ts-jest require() renderer/app.ts (whose guarded",
+  "//3": "module.exports block is dead code in the browser) and src/notepad.ts.",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "isolatedModules": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "types": ["node", "jest"]
+  },
+  "include": ["renderer/**/*.ts", "src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
