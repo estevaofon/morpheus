@@ -934,8 +934,8 @@ button {
    ============================================ */
 .find-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 6px;
   padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
@@ -948,17 +948,68 @@ button {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.find-label {
+/* Chevron that expands/collapses the replace row, VSCode-style. */
+.find-toggle-btn {
+  align-self: stretch;
+  width: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
-  width: 14px;
-  height: 14px;
-  color: var(--text-muted);
+  justify-content: center;
 }
 
-.find-label .icon {
+.find-toggle-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.find-toggle-btn .icon {
   width: 14px;
   height: 14px;
+  transition: transform 0.15s ease;
+}
+
+.find-toggle-btn[aria-expanded="true"] .icon {
+  transform: rotate(90deg);
+}
+
+/* Stack the find row and (optional) replace row to the right of the toggle. */
+.find-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.find-action-btn {
+  padding: 4px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.find-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
 }
 
 .find-input {

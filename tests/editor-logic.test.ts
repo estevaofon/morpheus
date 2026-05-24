@@ -215,3 +215,68 @@ describe('escapeRegex', () => {
     expect(app.escapeRegex('plain')).toBe('plain');
   });
 });
+
+describe('spliceReplacements', () => {
+  // Ranges mirror what find emits: the absolute offsets of each match in the
+  // ORIGINAL text, in ascending document order.
+  it('replaces a single range (Replace current)', () => {
+    // "ab cd ab" → replace the first "ab"
+    expect(app.spliceReplacements('ab cd ab', [{ start: 0, length: 2 }], 'XY')).toBe('XY cd ab');
+  });
+
+  it('replaces every range against original offsets (Replace All)', () => {
+    expect(
+      app.spliceReplacements('ab cd ab', [
+        { start: 0, length: 2 },
+        { start: 6, length: 2 },
+      ], 'XY'),
+    ).toBe('XY cd XY');
+  });
+
+  it('handles a replacement longer than the match without offset drift', () => {
+    // Offsets are read from the original string, so growth never shifts them.
+    expect(
+      app.spliceReplacements('a a a', [
+        { start: 0, length: 1 },
+        { start: 2, length: 1 },
+        { start: 4, length: 1 },
+      ], 'aa'),
+    ).toBe('aa aa aa');
+  });
+
+  it('deletes matches when the replacement is empty', () => {
+    expect(
+      app.spliceReplacements('foo bar foo', [
+        { start: 0, length: 3 },
+        { start: 8, length: 3 },
+      ], ''),
+    ).toBe(' bar ');
+  });
+
+  it('replaces matches at the very start and end of the text', () => {
+    expect(
+      app.spliceReplacements('xx mid xx', [
+        { start: 0, length: 2 },
+        { start: 7, length: 2 },
+      ], 'Q'),
+    ).toBe('Q mid Q');
+  });
+
+  it('inserts a replacement that itself contains the search text', () => {
+    expect(app.spliceReplacements('cat', [{ start: 0, length: 3 }], 'cat cat')).toBe('cat cat');
+  });
+
+  it('returns the text unchanged when there are no ranges', () => {
+    expect(app.spliceReplacements('unchanged', [], 'X')).toBe('unchanged');
+  });
+
+  it('skips overlapping ranges defensively', () => {
+    // Second range starts before the first one ends — ignored.
+    expect(
+      app.spliceReplacements('abcdef', [
+        { start: 0, length: 3 },
+        { start: 1, length: 3 },
+      ], 'X'),
+    ).toBe('Xdef');
+  });
+});

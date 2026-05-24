@@ -10,6 +10,7 @@ Matrix-themed desktop notepad, built with Electron + TypeScript.
 - Platform-aware line endings on disk: CRLF on Windows, LF elsewhere
 - Incremental sidebar search across note titles and content, with inline match highlighting
 - Find-in-note (Ctrl+F) with match count, prev/next navigation, and case-sensitive toggle — works in both edit and preview modes
+- Find & Replace (Ctrl+H) — VSCode-style expandable replace row with Replace / Replace All; replacements reuse the highlighted matches and fold into a single undo step
 - Markdown preview (Ctrl+Shift+P) rendered with `marked` and sanitized through DOMPurify
 - Mermaid diagrams rendered from ```` ```mermaid ```` fenced blocks, themed to match the Matrix palette
 - Custom frameless window with built-in minimize / maximize / close controls
@@ -36,8 +37,8 @@ src/
   preload.ts    # contextBridge — exposes `electronAPI` to the renderer
   notepad.ts    # Note CRUD + filePath tracking (fs/promises)
 renderer/
-  index.html    # Titlebar, sidebar, editor, find bar, modals
-  app.ts        # UI logic, find, preview, preferences, mermaid wiring
+  index.html    # Titlebar, sidebar, editor, find/replace bar, modals
+  app.ts        # UI logic, find/replace, preview, preferences, mermaid wiring
   styles.css
   fonts/        # JetBrains Mono
   marked.umd.js
@@ -65,7 +66,8 @@ silently break behavior. Run them with `npm test`.
 ```
 tests/
   editor-logic.test.ts      # indent/outdent math, JSON fold regions, file-type
-                            #   detection, JSON auto-format, string utilities
+                            #   detection, JSON auto-format, string utilities,
+                            #   replace splicing
   editor-highlight.test.ts  # Python/JSON/Markdown tokenizers, HTML escaping,
                             #   search-match highlighting (find)
   notepad.test.ts           # notes CRUD + corrupt-index recovery (data layer)
@@ -87,6 +89,7 @@ so the editor's load-time DOM lookups resolve exactly as in the app.
 | `Ctrl+Shift+S` | Save As — always opens the native dialog             |
 | `Ctrl+O`       | Open a file from disk                                |
 | `Ctrl+F`       | Find in current note                                 |
+| `Ctrl+H`       | Find & Replace (Enter replaces current, Ctrl+Alt+Enter replaces all) |
 | `Ctrl+Shift+P` | Toggle Markdown preview                              |
 | `Ctrl+,`       | Open Preferences                                     |
 | `Tab`          | Insert 2 spaces (indents the whole selection)        |

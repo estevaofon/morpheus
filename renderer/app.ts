@@ -361,6 +361,13 @@ const findNextBtn = document.getElementById('find-next') as HTMLButtonElement;
 const findCloseBtn = document.getElementById('find-close') as HTMLButtonElement;
 const findBtn = document.getElementById('btn-find') as HTMLButtonElement;
 
+// Replace controls (the find bar's expandable second row)
+const replaceInput = document.getElementById('replace-input') as HTMLInputElement;
+const replaceRow = document.getElementById('find-replace-row') as HTMLDivElement;
+const replaceToggleBtn = document.getElementById('find-toggle-replace') as HTMLButtonElement;
+const replaceOneBtn = document.getElementById('replace-one') as HTMLButtonElement;
+const replaceAllBtn = document.getElementById('replace-all') as HTMLButtonElement;
+
 // Window Controls
 document.getElementById('btn-minimize')?.addEventListener('click', () => window.electronAPI.minimize());
 document.getElementById('btn-maximize')?.addEventListener('click', () => window.electronAPI.maximize());
@@ -421,6 +428,20 @@ findInput?.addEventListener('keydown', (e) => {
 findCase?.addEventListener('change', () => performFind());
 findPrevBtn?.addEventListener('click', () => navigateFind(-1));
 findNextBtn?.addEventListener('click', () => navigateFind(1));
+
+// Replace controls
+replaceToggleBtn?.addEventListener('click', () => toggleReplaceRow());
+replaceOneBtn?.addEventListener('click', () => replaceCurrentMatch());
+replaceAllBtn?.addEventListener('click', () => replaceAllMatches());
+replaceInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    // Ctrl+Alt+Enter replaces all (VSCode); plain Enter replaces the current.
+    if (e.ctrlKey && e.altKey) replaceAllMatches();
+    else replaceCurrentMatch();
+  }
+  if (e.key === 'Escape') hideFindBar();
+});
 
 // Content this large makes per-keystroke re-tokenization visibly stutter
 // (full tokenize + setEditorHTML across hundreds of KB). Debounce so the
@@ -617,6 +638,10 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
     showFindBar();
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H')) {
+    e.preventDefault();
+    showFindBar(true);
   }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
     e.preventDefault();
@@ -1125,6 +1150,10 @@ function togglePreview(): void {
     lineNumbersEl.style.display = 'none';
     setStatus('> Preview mode.');
 
+    // Replace can't edit the rendered preview — collapse it and hide its toggle.
+    setReplaceRowVisible(false);
+    replaceToggleBtn.style.display = 'none';
+
     if (findBar.style.display === 'flex') {
       performFind();
       findInput.focus();
@@ -1138,6 +1167,9 @@ function togglePreview(): void {
     lineCount.style.display = '';
     lineNumbersEl.style.display = '';
     setStatus('> Edit mode.');
+
+    // Back in the editor: the replace toggle is usable again.
+    replaceToggleBtn.style.display = '';
 
     applyEditorHighlighting();
     if (findBar.style.display === 'flex') {
@@ -1208,24 +1240,44 @@ async function renderMermaidBlocks(): Promise<void> {
 // can toggle the active class and scroll without re-running the search.
 let findMarkElements: HTMLElement[] = [];
 
-function showFindBar(): void {
+function showFindBar(withReplace = false): void {
   if (!activeNoteId) {
     setStatus('> Open a note first.');
     return;
   }
   findBar.style.display = 'flex';
-  findInput.focus();
+
+  // Drive the replace row from the shortcut used, every time: Ctrl+F (false)
+  // shows find only, Ctrl+H (true) expands replace. Setting it explicitly —
+  // rather than only expanding — means the row doesn't stay open from a
+  // previous Ctrl+H after the bar was closed. Replace is edit-only, so never
+  // expand it over the read-only markdown preview.
+  const wantReplace = withReplace && !isPreviewMode;
+  setReplaceRowVisible(wantReplace);
 
   const selection = window.getSelection()?.toString() || '';
   if (selection) {
     findInput.value = selection;
   }
+
+  if (wantReplace) replaceInput.focus();
+  else findInput.focus();
+
   performFind();
 }
 
 function hideFindBar(): void {
+  // Before tearing down the marks, note where the active match sits so we can
+  // drop the caret there once focus returns to the editor (VSCode does this on
+  // Esc, so typing resumes from the last match instead of the top).
+  let caretTarget: number | null = null;
+  if (!isPreviewMode && activeMatchIndex >= 0 && findMarkElements[activeMatchIndex]) {
+    caretTarget = getElementTextOffset(findMarkElements[activeMatchIndex]);
+  }
+
   findBar.style.display = 'none';
   findInput.value = '';
+  replaceInput.value = '';
   findMatchCount.textContent = '0 matches';
   findMarkElements = [];
   activeMatchIndex = -1;
@@ -1235,7 +1287,25 @@ function hideFindBar(): void {
     // Re-applying highlighting also wipes any <mark> nodes we inserted.
     applyEditorHighlighting();
     noteContentInput.focus();
+    if (caretTarget !== null) setCaretOffset(caretTarget);
   }
+}
+
+/** Show or hide the replace row and keep the toggle chevron's state in sync. */
+function setReplaceRowVisible(visible: boolean): void {
+  replaceRow.style.display = visible ? 'flex' : 'none';
+  replaceToggleBtn.setAttribute('aria-expanded', String(visible));
+}
+
+function toggleReplaceRow(): void {
+  if (isPreviewMode) {
+    setStatus('> Replace is available in edit mode only.');
+    return;
+  }
+  const willShow = replaceRow.style.display === 'none';
+  setReplaceRowVisible(willShow);
+  if (willShow) replaceInput.focus();
+  else findInput.focus();
 }
 
 function performFind(): void {
@@ -1264,7 +1334,9 @@ function performFind(): void {
 
   if (count > 0) {
     activeMatchIndex = 0;
-    setActiveMark(0);
+    // Per-keystroke: jump instantly so typing doesn't trigger a smooth-scroll
+    // animation on every character. Arrow/Enter navigation animates instead.
+    setActiveMark(0, false);
   }
 }
 
@@ -1334,23 +1406,163 @@ function navigateFind(direction: number): void {
   findMatchCount.textContent = `${activeMatchIndex + 1}/${count}`;
 }
 
-function setActiveMark(idx: number): void {
+function setActiveMark(idx: number, smooth = true): void {
   findMarkElements.forEach((m, i) => {
     m.classList.toggle('find-mark-active', i === idx);
   });
   const target = findMarkElements[idx];
   if (!target) return;
-  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  scrollMatchIntoView(target, smooth);
+  // NOTE: we deliberately do NOT move the document selection onto the match
+  // here. Doing so on every keystroke (performFind runs per input) steals
+  // focus from the find/replace field into the contenteditable, so the next
+  // letters land in the note body. The caret is dropped onto the active match
+  // only when the bar closes (see hideFindBar) — matching VSCode.
+}
 
-  // In edit mode also drop the caret onto the match so Esc → keep typing
-  // resumes from the right position.
-  if (!isPreviewMode) {
-    const range = document.createRange();
-    range.selectNodeContents(target);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
+/**
+ * Scroll the active match to the vertical center of whichever pane is showing
+ * (editor or preview). We set scrollTop directly rather than relying on
+ * Element.scrollIntoView(), which is flaky inside the Electron contenteditable
+ * — especially now that find no longer moves the selection (which used to
+ * trigger the browser's native scroll-to-caret). The offset is computed
+ * relative to the scrollable content, so it's stable even mid-animation when
+ * the arrows are clicked rapidly. The line-number gutter follows along via the
+ * editor's existing scroll listener.
+ */
+function scrollMatchIntoView(mark: HTMLElement, smooth: boolean): void {
+  const container = isPreviewMode ? notePreviewEl : noteContentInput;
+  const containerRect = container.getBoundingClientRect();
+  const markRect = mark.getBoundingClientRect();
+  const markTopWithinContent = markRect.top - containerRect.top + container.scrollTop;
+  const target = markTopWithinContent - container.clientHeight / 2 + markRect.height / 2;
+  const maxScroll = container.scrollHeight - container.clientHeight;
+  const top = Math.max(0, Math.min(target, maxScroll));
+  container.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+}
+
+// ============================================
+// REPLACE
+// ============================================
+// Replace reuses the exact ranges find highlighted (the <mark> nodes) rather
+// than running its own search, so the count shown ("3 matches") always equals
+// what Replace All rewrites — no second, divergent search to drift out of
+// sync. Each edit flows through the same snapshot → swap text → re-highlight
+// path the Tab handler uses, so Ctrl+Z undoes a Replace All in one step, just
+// like VSCode.
+
+/** Absolute character offset of `el`'s start within the editor's text. */
+function getElementTextOffset(el: HTMLElement): number {
+  const range = document.createRange();
+  range.selectNodeContents(noteContentInput);
+  range.setEnd(el, 0);
+  return range.toString().length;
+}
+
+/** The [start, length) text range a find mark covers. */
+function markRange(mark: HTMLElement): { start: number; length: number } {
+  return { start: getElementTextOffset(mark), length: (mark.textContent ?? '').length };
+}
+
+/**
+ * Splice `replacement` into `text` at each range. Ranges must be sorted
+ * ascending and non-overlapping (find emits marks in document order); any
+ * overlap is skipped defensively. Pure — unit tested.
+ */
+function spliceReplacements(
+  text: string,
+  ranges: Array<{ start: number; length: number }>,
+  replacement: string,
+): string {
+  let result = '';
+  let last = 0;
+  for (const { start, length } of ranges) {
+    if (start < last) continue;
+    result += text.slice(last, start) + replacement;
+    last = start + length;
   }
+  return result + text.slice(last);
+}
+
+/**
+ * Commit a programmatic full-text edit: snapshot for undo, swap the text,
+ * re-highlight, place the caret, refresh counts and persist. Same path the
+ * Tab-indent handler uses, so replace integrates with undo/redo like typing.
+ */
+function applyProgrammaticEdit(newValue: string, caretStart: number, caretEnd: number): void {
+  // Only reposition the caret when the editor itself holds focus. During a
+  // replace the focus is on the find/replace field, and forcing a selection
+  // into the contenteditable would yank focus (and the user's typing) out of
+  // that field and into the note body.
+  const editorFocused = document.activeElement === noteContentInput;
+  snapshotEditorState();
+  setEditorValue(newValue);
+  applyEditorHighlighting();
+  if (editorFocused) setCaretOffset(caretStart, caretEnd);
+  updateCounts(newValue);
+  void persistCurrentNote();
+}
+
+function replaceCurrentMatch(): void {
+  if (isPreviewMode) {
+    setStatus('> Replace is available in edit mode only.');
+    return;
+  }
+  if (!findInput.value || findMarkElements.length === 0) return;
+
+  const idx =
+    activeMatchIndex >= 0 && activeMatchIndex < findMarkElements.length ? activeMatchIndex : 0;
+  const mark = findMarkElements[idx];
+  if (!mark) return;
+
+  const replacement = replaceInput.value;
+  const value = getEditorValue();
+  const range = markRange(mark);
+  const newValue = spliceReplacements(value, [range], replacement);
+  // Resume past the inserted text so repeated Replace walks forward and never
+  // re-matches inside what we just inserted (e.g. replacing "a" with "aa").
+  const resumeAt = range.start + replacement.length;
+
+  applyProgrammaticEdit(newValue, resumeAt, resumeAt);
+  refreshFindAfterReplace(resumeAt);
+}
+
+function replaceAllMatches(): void {
+  if (isPreviewMode) {
+    setStatus('> Replace is available in edit mode only.');
+    return;
+  }
+  if (!findInput.value || findMarkElements.length === 0) {
+    setStatus('> No matches to replace.');
+    return;
+  }
+
+  const replacement = replaceInput.value;
+  const value = getEditorValue();
+  // Snapshot every match's range before we mutate — the marks are destroyed
+  // the moment we re-highlight.
+  const ranges = findMarkElements.map(markRange);
+  const count = ranges.length;
+  const newValue = spliceReplacements(value, ranges, replacement);
+
+  applyProgrammaticEdit(newValue, 0, 0);
+  performFind(); // re-scan; 0 matches now unless the replacement re-matches
+  setStatus(`> Replaced ${count} ${count === 1 ? 'occurrence' : 'occurrences'}.`);
+}
+
+/**
+ * Re-scan after a single replace and put the active match on the first one
+ * at/after `offset`, wrapping to the top. Keeps Replace stepping forward.
+ */
+function refreshFindAfterReplace(offset: number): void {
+  performFind();
+  const count = findMarkElements.length;
+  if (count === 0) return;
+  let target = findMarkElements.findIndex((m) => getElementTextOffset(m) >= offset);
+  if (target === -1) target = 0;
+  activeMatchIndex = target;
+  setActiveMark(target);
+  findMatchCount.textContent = `${target + 1}/${count}`;
 }
 
 // ============================================
@@ -2257,6 +2469,7 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     tokenizeJsonLine,
     tokenizeMarkdown,
     wrapMatchesInElement,
+    spliceReplacements,
     looksLikePython,
     looksLikeJson,
     isJsonByPathOrTitle,

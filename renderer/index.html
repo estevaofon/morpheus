@@ -73,25 +73,34 @@
         </div>
       </div>
 
-      <!-- Find Bar -->
+      <!-- Find / Replace Bar -->
       <div class="find-bar" id="find-bar" style="display: none;">
-        <span class="find-label" aria-hidden="true">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        </span>
-        <input type="text" id="find-input" class="find-input" placeholder="Find...">
-        <label class="find-case-label">
-          <input type="checkbox" id="find-case"> Aa
-        </label>
-        <span class="find-match-count" id="find-match-count">0 matches</span>
-        <button class="find-nav-btn" id="find-prev" title="Previous" aria-label="Previous match">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        <button class="find-toggle-btn" id="find-toggle-replace" type="button" title="Toggle Replace (Ctrl+H)" aria-label="Toggle Replace" aria-expanded="false">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
-        <button class="find-nav-btn" id="find-next" title="Next" aria-label="Next match">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <button class="find-close-btn" id="find-close" title="Close" aria-label="Close find">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div class="find-fields">
+          <div class="find-row">
+            <input type="text" id="find-input" class="find-input" placeholder="Find...">
+            <label class="find-case-label">
+              <input type="checkbox" id="find-case"> Aa
+            </label>
+            <span class="find-match-count" id="find-match-count">0 matches</span>
+            <button class="find-nav-btn" id="find-prev" type="button" title="Previous (Shift+Enter)" aria-label="Previous match">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button class="find-nav-btn" id="find-next" type="button" title="Next (Enter)" aria-label="Next match">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <button class="find-close-btn" id="find-close" type="button" title="Close (Esc)" aria-label="Close find">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="find-row find-replace-row" id="find-replace-row" style="display: none;">
+            <input type="text" id="replace-input" class="find-input" placeholder="Replace...">
+            <button class="find-action-btn" id="replace-one" type="button" title="Replace (Enter)">Replace</button>
+            <button class="find-action-btn" id="replace-all" type="button" title="Replace All (Ctrl+Alt+Enter)">Replace All</button>
+          </div>
+        </div>
       </div>
 
       <!-- Editor Content -->

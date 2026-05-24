@@ -35,6 +35,11 @@ export interface AppModule {
     query: string,
     caseSensitive: boolean,
   ) => HTMLElement[];
+  spliceReplacements: (
+    text: string,
+    ranges: Array<{ start: number; length: number }>,
+    replacement: string,
+  ) => string;
   looksLikePython: (content: string) => boolean;
   looksLikeJson: (content: string) => boolean;
   isJsonByPathOrTitle: (...names: Array<string | undefined>) => boolean;
